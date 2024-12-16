@@ -8,7 +8,6 @@ import {
   TrendingUp,
   Users,
   Shield,
-  ArrowRight,
   Send,
 } from "lucide-react";
 

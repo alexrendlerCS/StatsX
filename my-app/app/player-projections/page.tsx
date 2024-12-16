@@ -30,13 +30,15 @@ export default function PlayerProjections() {
   const [defenseTeam, setDefenseTeam] = useState("");
   const [position, setPosition] = useState("");
   const [projections, setProjections] = useState({});
-  const [error, setError] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [playerLines, setPlayerLines] = useState({});
   const [selectedStat, setSelectedStat] = useState("rushing_yards"); // Default stat
   const [customValue, setCustomValue] = useState(null); // User-defined line value
   const [weeklyStats, setWeeklyStats] = useState([]); // Weekly stats for the player
   const [fetchTriggered, setFetchTriggered] = useState(false); // Tracks whether projections should be fetched
+   // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [error, setError] = useState<string | null>(null); // Error state
+  
   const normalizedPlayerName = playerName
     .trim()
     .toLowerCase()
@@ -209,6 +211,7 @@ export default function PlayerProjections() {
   }, [weeklyStats, selectedStat]);
 
   const fetchProjections = async () => {
+    setError(null); // Clear previous errors
     if (!playerName || !defenseTeam) {
       setError("Please provide both a player name and defense team.");
       return;
@@ -339,15 +342,13 @@ export default function PlayerProjections() {
     }
   };
 
-  const getColumns = () =>
-    relevantStats[position]?.map((stat) => ({
-      label: stat.label,
-      key: stat.key,
-      market: stat.key, // Map to the correct stat key
-    })) || [];
-
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null); // Clear previous errors
+    if (!playerName || !defenseTeam) {
+      setError("Player name and defense team are required."); // Set error
+      return;
+    }
     setFetchTriggered(true); // Enable fetching and rendering
     fetchProjections();
     fetchWeeklyStats(); // Fetch weekly stats here
@@ -364,21 +365,6 @@ export default function PlayerProjections() {
       return "text-yellow-400 font-bold"; // Middle ground (e.g., 1/3, 3/5)
     }
     return "text-red-400 font-bold"; // Poor performance (e.g., 0/3, 0/5, 1/5, 2/5)
-  };
-
-  const statKeyMapping = {
-    passing_attempts: "player_pass_attempts",
-    completions: "player_completions",
-    passing_yards: "player_pass_yds",
-    passing_tds: "player_pass_tds",
-    interceptions: "player_interceptions",
-    rushing_attempts: "player_rush_attempts",
-    rushing_yards: "player_rush_yds",
-    rushing_tds: "player_rush_tds",
-    targets: "player_targets",
-    receptions: "player_receptions",
-    receiving_yards: "player_reception_yds",
-    receiving_tds: "player_receiving_tds",
   };
 
   const calculateTrends = (statKey) => {
@@ -404,7 +390,7 @@ export default function PlayerProjections() {
     return { average: average.toFixed(2), last3, last5 };
   };
 
-  const mapStatToMarket = (label, positionId) => {
+  const mapStatToMarket = (label) => {
     const mapping = {
       "Passing Attempts": "player_pass_attempts",
       Completions: "player_pass_completions",
@@ -775,7 +761,7 @@ export default function PlayerProjections() {
                     const normalizedPlayerName = playerName
                       .trim()
                       .toLowerCase();
-                    const mappedStatKey = mapStatToMarket(stat.label, position);
+                    const mappedStatKey = mapStatToMarket(stat.label);
                     let playerLine =
                       playerLines[normalizedPlayerName]?.[mappedStatKey] ||
                       "N/A";

@@ -136,13 +136,6 @@ export default function PlayerStats() {
     fetchPlayerStats();
   };
 
-  const sampleData = [
-    { name: "Week 1", value: 0 },
-    { name: "Week 2", value: 0 },
-    { name: "Week 3", value: 0 },
-    { name: "Week 4", value: 0 },
-  ]; // Placeholder data for the bar chart
-
   const getComparisonColor = (value, avgValue, key) => {
     console.log(`Key: ${key}, Value: ${value}, Avg: ${avgValue}`); // Debugging log
 
