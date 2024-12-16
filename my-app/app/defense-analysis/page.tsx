@@ -1,0 +1,548 @@
+"use client";
+
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { BarChart3, Shield } from "lucide-react";
+import supabase from "../supabaseClient";
+
+export default function DefenseAnalysis() {
+  const [selectedTeam, setSelectedTeam] = useState("");
+  const [selectedPosition, setSelectedPosition] = useState("");
+  const [tableHeaders, setTableHeaders] = useState<string[]>([]);
+  const [tableRows, setTableRows] = useState([]);
+  const [loading, setLoading] = useState(false); // New state for loading spinner
+  const [fetchPerformed, setFetchPerformed] = useState(false); // To track if stats have been fetched
+
+  const teams = [
+    { name: "49ers", value: "SF" },
+    { name: "Bears", value: "CHI" },
+    { name: "Bengals", value: "CIN" },
+    { name: "Bills", value: "BUF" },
+    { name: "Broncos", value: "DEN" },
+    { name: "Browns", value: "CLE" },
+    { name: "Buccaneers", value: "TB" },
+    { name: "Cardinals", value: "ARI" },
+    { name: "Chargers", value: "LAC" },
+    { name: "Chiefs", value: "KC" },
+    { name: "Colts", value: "IND" },
+    { name: "Commanders", value: "WAS" },
+    { name: "Cowboys", value: "DAL" },
+    { name: "Dolphins", value: "MIA" },
+    { name: "Eagles", value: "PHI" },
+    { name: "Falcons", value: "ATL" },
+    { name: "Giants", value: "NYG" },
+    { name: "Jaguars", value: "JAC" },
+    { name: "Jets", value: "NYJ" },
+    { name: "Lions", value: "DET" },
+    { name: "Packers", value: "GB" },
+    { name: "Panthers", value: "CAR" },
+    { name: "Patriots", value: "NE" },
+    { name: "Raiders", value: "LV" },
+    { name: "Rams", value: "LAR" },
+    { name: "Ravens", value: "BAL" },
+    { name: "Saints", value: "NO" },
+    { name: "Seahawks", value: "SEA" },
+    { name: "Steelers", value: "PIT" },
+    { name: "Texans", value: "HOU" },
+    { name: "Titans", value: "TEN" },
+    { name: "Vikings", value: "MIN" },
+  ];
+
+  const positions = [
+    { name: "Running Back", value: "RB" },
+    { name: "Wide Receiver", value: "WR" },
+    { name: "Tight End", value: "TE" },
+    { name: "Quarterback", value: "QB" },
+  ];
+
+  const fetchDefenseData = async () => {
+    if (!selectedTeam || !selectedPosition) {
+      alert("Please select both a team and a position.");
+      return;
+    }
+
+    // Show loading spinner and reset state
+    setLoading(true);
+    setFetchPerformed(true); // Display results card with spinner initially
+    setTableRows([]); // Reset table rows while loading
+
+    try {
+      // Set table headers based on position
+      const headers =
+        selectedPosition === "QB"
+          ? [
+              "Week",
+              "Matchup",
+              "Passing Attempts",
+              "Completions",
+              "Passing Yards",
+              "Passing TDs",
+              "Interceptions",
+              "Rate",
+              "Rushing Attempts",
+              "Rushing Yards",
+              "Rushing TDs",
+            ]
+          : [
+              "Week",
+              "Matchup",
+              "Rushing Attempts",
+              "Total Rushing Yards",
+              "Avg Yards per Carry",
+              "Rushing TDs",
+              "Targets",
+              "Receptions",
+              "Total Receiving Yards",
+              "Avg Yards per Catch",
+              "Receiving TDs",
+            ];
+      setTableHeaders(headers);
+
+      // Database mappings
+      const headerToDbKeyTeam = {
+        "Passing Attempts": "passing_attempts",
+        Completions: "completions",
+        "Passing Yards": "passing_yards",
+        "Passing TDs": "passing_tds",
+        Interceptions: "interceptions",
+        Rate: "rate",
+        "Rushing Attempts": "rushing_attempts",
+        "Rushing Yards": "total_rushing_yards", // QB-specific adjusted below
+        "Avg Rushing Yards": "avg_yards_per_carry", // QB-specific adjusted below
+        "Rushing TDs": "rushing_tds",
+        Targets: "targets",
+        Receptions: "receptions",
+        "Total Rushing Yards": "total_rushing_yards",
+        "Avg Yards per Carry": "avg_yards_per_carry",
+        "Total Receiving Yards": "total_receiving_yards",
+        "Avg Yards per Catch": "avg_yards_per_catch",
+        "Receiving TDs": "receiving_tds",
+      };
+
+      const headerToDbKeyPlayer = {
+        ...headerToDbKeyTeam,
+        "Rushing Yards": "rushing_yards", // QB-specific handled below
+        "Avg Rushing Yards": "avg_rushing_yards", // QB-specific handled below
+        "Total Rushing Yards": "rushing_yards",
+        "Total Receiving Yards": "receiving_yards",
+      };
+
+      // Determine database tables based on position
+      const teamTable =
+        selectedPosition === "QB"
+          ? "qb_defensive_stats"
+          : "general_defensive_stats";
+      const leagueTable =
+        selectedPosition === "QB"
+          ? "all_defense_averages_qb"
+          : "all_defense_averages";
+
+      // Fetch team stats
+      let query = supabase
+        .from(teamTable)
+        .select("*")
+        .eq("team_id", selectedTeam);
+      if (selectedPosition !== "QB") {
+        query = query.eq("position_id", selectedPosition);
+      }
+
+      const { data: teamStats, error: teamError } = await query;
+      if (teamError || !teamStats) {
+        console.error("Error fetching team stats:", teamError);
+        alert("Failed to fetch team data.");
+        return;
+      }
+
+      // Fetch league averages
+      const { data: leagueAverages, error: leagueError } =
+        selectedPosition === "QB"
+          ? await supabase.from(leagueTable).select("*").single()
+          : await supabase
+              .from(leagueTable)
+              .select("*")
+              .eq("position_id", selectedPosition)
+              .single();
+
+      if (leagueError || !leagueAverages) {
+        console.error("Error fetching league averages:", leagueError);
+        alert("Failed to fetch league averages.");
+        return;
+      }
+
+      // Function to get comparison color
+      const getComparisonColor = (header, value, avgValue) => {
+        if (header === "Passing TDs") {
+          if (value >= 2) return "#00c853"; // Green
+          if (value === 1) return "#ffea00"; // Yellow
+          if (value === 0) return "#d32f2f"; // Red
+        }
+
+        if (header === "Rushing TDs" || header === "Receiving TDs") {
+          if (value >= 1) return "#00c853"; // Green
+          if (value === 0) return "#d32f2f"; // Red
+        }
+
+        if (avgValue === 0) return "#d32f2f"; // Red for missing averages
+        if (value > avgValue + 1.5) return "#00c853"; // Green for above average
+        if (Math.abs(value - avgValue) <= 1.5) return "#ffea00"; // Yellow
+        return "#d32f2f"; // Red for below average
+      };
+
+      const rows = [];
+      const valuesForAverages = {};
+
+      // Process stats week by week
+      for (let week = 1; week <= 17; week++) {
+        const weekStats = teamStats.filter((row) => row.week === week);
+
+        if (weekStats.length > 0) {
+          const parentRow = {
+            Week: week,
+            Matchup: `${weekStats[0].matchup || "Unknown Opponent"} ▼`,
+            rowType: "parent",
+            isHidden: false,
+          };
+
+          headers.slice(2).forEach((header) => {
+            let dbKey = headerToDbKeyTeam[header];
+            if (!dbKey) {
+              console.error(
+                `Header "${header}" is not mapped to a database key.`
+              );
+              parentRow[header] = "N/A";
+              return;
+            }
+
+            if (selectedPosition === "QB" && dbKey === "total_rushing_yards") {
+              dbKey = "rushing_yards";
+            } else if (
+              selectedPosition === "QB" &&
+              dbKey === "avg_yards_per_carry"
+            ) {
+              dbKey = "avg_qb_avg_rushing_yards";
+            }
+
+            const value = weekStats[0][dbKey] ?? "N/A";
+            const avgValue = leagueAverages[`avg_${dbKey}`] ?? 0;
+
+            if (!valuesForAverages[header]) valuesForAverages[header] = [];
+            if (value !== "N/A") valuesForAverages[header].push(Number(value));
+
+            parentRow[header] =
+              value === "N/A" ? (
+                value
+              ) : (
+                <span
+                  style={{
+                    color: getComparisonColor(header, value, avgValue),
+                    fontWeight: "bold",
+                  }}
+                >
+                  {value}
+                </span>
+              );
+          });
+
+          rows.push(parentRow);
+          // Fetch player stats
+          const { data: playerStats, error: playerStatsError } = await supabase
+            .from("player_stats")
+            .select("*")
+            .eq("opponent", selectedTeam)
+            .eq("position_id", selectedPosition)
+            .eq("week", week);
+
+          if (playerStatsError) {
+            console.error(
+              `Error fetching player stats for week ${week}:`,
+              playerStatsError.message
+            );
+            continue;
+          }
+
+          const playerAveragesMap = {};
+          for (const player of playerStats) {
+            const { data: playerAverage, error: avgError } = await supabase
+              .from("player_averages")
+              .select("*")
+              .eq("player_name", player.player_name)
+              .single();
+
+            if (avgError) {
+              console.error(
+                `Error fetching averages for ${player.player_name}:`,
+                avgError.message
+              );
+              continue;
+            }
+            playerAveragesMap[player.player_name] = playerAverage;
+          }
+
+          playerStats.forEach((player) => {
+            const childRow = {
+              Week: "",
+              Matchup: player.player_name,
+              rowType: "child",
+              isHidden: true,
+            };
+
+            headers.slice(2).forEach((header) => {
+              let playerStatKey = headerToDbKeyPlayer[header];
+
+              if (
+                selectedPosition === "QB" &&
+                (header === "Rushing Yards" || header === "Avg Rushing Yards")
+              ) {
+                playerStatKey =
+                  header === "Rushing Yards"
+                    ? "rushing_yards"
+                    : "avg_qb_avg_rushing_yards";
+              }
+
+              const playerValue = player[playerStatKey] ?? "N/A";
+              const playerAvgValue =
+                playerAveragesMap[player.player_name]?.[
+                  `avg_${playerStatKey}`
+                ] ?? 0;
+
+              childRow[header] =
+                playerValue === "N/A" ? (
+                  playerValue
+                ) : (
+                  <span
+                    style={{
+                      color: getComparisonColor(
+                        header,
+                        playerValue,
+                        playerAvgValue
+                      ), // Pass header here
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {playerValue}
+                  </span>
+                );
+            });
+
+            rows.push(childRow);
+          });
+        }
+      }
+      // Add L3 Average and Overall Average rows
+      const addAverageRows = (values, label) => {
+        const averageRow = { Week: "", Matchup: label, rowType: "average" };
+        headers.slice(2).forEach((header) => {
+          if (!values[header] || values[header].length === 0) {
+            averageRow[header] = "N/A";
+            return;
+          }
+
+          const sum = values[header].reduce((a, b) => a + b, 0);
+          const average =
+            label === "L3 Average"
+              ? sum / Math.min(values[header].length, 3)
+              : sum / values[header].length;
+
+          averageRow[header] = (
+            <span style={{ fontWeight: "bold" }}>{average.toFixed(2)}</span>
+          );
+        });
+        rows.push(averageRow);
+      };
+
+      addAverageRows(valuesForAverages, "L3 Average");
+      addAverageRows(valuesForAverages, "Overall Average");
+
+      setTableRows(rows); // Update table rows with processed data
+    } catch (error) {
+      console.error("Error fetching data:", error.message);
+      alert("An unexpected error occurred. Please try again.");
+    } finally {
+      setLoading(false); // Stop loading spinner
+    }
+  };
+
+  // **Handle Row Click**
+  const handleRowClick = (rowIndex) => {
+    const updatedRows = [...tableRows];
+    const parentRow = updatedRows[rowIndex];
+
+    if (parentRow.rowType !== "parent") return;
+
+    let i = rowIndex + 1;
+    while (i < updatedRows.length && updatedRows[i].rowType === "child") {
+      updatedRows[i].isHidden = !updatedRows[i].isHidden;
+      i++;
+    }
+
+    parentRow.Matchup = parentRow.Matchup.includes("▼")
+      ? parentRow.Matchup.replace("▼", "▲")
+      : parentRow.Matchup.replace("▲", "▼");
+
+    setTableRows(updatedRows);
+  };
+
+  return (
+    <div className="flex-grow">
+      <div className="space-y-8">
+        <div className="flex items-center justify-center space-x-2">
+          <Shield className="w-8 h-8 text-blue-400" />
+          <h1 className="text-4xl font-bold text-center text-blue-400">
+            Defense Analysis
+          </h1>
+        </div>
+
+        <Card className="bg-gray-800 border-blue-400">
+          <CardHeader>
+            <CardTitle className="text-blue-400 flex items-center space-x-2">
+              <BarChart3 className="w-6 h-6" />
+              <span>Compare Defenses</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Dropdowns and "vs." text */}
+              <div className="flex items-center justify-between space-x-4">
+                {/* Team Dropdown */}
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Team
+                  </label>
+                  <Select onValueChange={setSelectedTeam}>
+                    <SelectTrigger className="bg-gray-700 text-gray-100 border border-gray-600 w-full rounded px-4 py-2 shadow-lg">
+                      <SelectValue placeholder="Select a team" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-700 border border-gray-600 rounded shadow-lg">
+                      {teams.map((team) => (
+                        <SelectItem
+                          key={team.value}
+                          value={team.value}
+                          className="px-4 py-2 text-gray-100 cursor-pointer hover:bg-gray-600"
+                        >
+                          {team.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* "vs." text */}
+                <div
+                  className="relative text-gray-400 font-bold text-lg"
+                  style={{ top: "6px" }}
+                >
+                  vs.
+                </div>
+
+                {/* Position Dropdown */}
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Position
+                  </label>
+                  <Select onValueChange={setSelectedPosition}>
+                    <SelectTrigger className="bg-gray-700 text-gray-100 border border-gray-600 w-full rounded px-4 py-2 shadow-lg">
+                      <SelectValue placeholder="Select a position" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-700 border border-gray-600 rounded shadow-lg">
+                      {positions.map((position) => (
+                        <SelectItem
+                          key={position.value}
+                          value={position.value}
+                          className="px-4 py-2 text-gray-100 cursor-pointer hover:bg-gray-600"
+                        >
+                          {position.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Fetch Stats Button */}
+              <Button
+                onClick={fetchDefenseData}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Fetch Stats
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Defense Comparison Results */}
+        {fetchPerformed && (
+          <Card className="bg-gradient-to-b from-gray-800 via-gray-900 to-black border border-blue-500 shadow-lg rounded-lg">
+            <CardHeader>
+              <CardTitle className="text-blue-400 text-2xl font-bold flex items-center">
+                Defense Comparison Results
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex justify-center items-center py-10">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-blue-400 border-solid"></div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-gray-300">
+                    <thead className="text-xs uppercase bg-gray-700 text-gray-400">
+                      <tr>
+                        {tableHeaders.map((header) => (
+                          <th key={header} scope="col" className="px-6 py-3">
+                            {header}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tableRows.map((row, index) => (
+                        <tr
+                          key={index}
+                          className={`border-b ${
+                            row.rowType === "child" && row.isHidden
+                              ? "hidden"
+                              : ""
+                          } ${
+                            row.rowType === "child"
+                              ? "bg-gray-900"
+                              : "bg-gray-800"
+                          } border-gray-700`}
+                          onClick={() =>
+                            row.rowType === "parent" && handleRowClick(index)
+                          }
+                          style={{
+                            cursor:
+                              row.rowType === "parent" ? "pointer" : "default",
+                          }}
+                        >
+                          {tableHeaders.map((header) => (
+                            <td
+                              key={header}
+                              className={`px-6 py-4 ${
+                                row.rowType === "child" ? "pl-12 text-left" : ""
+                              }`}
+                            >
+                              {row[header] !== undefined ? row[header] : "N/A"}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
