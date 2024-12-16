@@ -1,0 +1,540 @@
+/* General Reset */
+body, h1, h2, p, a {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+}
+
+/* Header Styles */
+header {
+    background-color: #2A3F54; /* Dark blue background */
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    position: fixed;
+    top: 0;
+    width: 100%;
+    z-index: 1000;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); /* Optional shadow effect */
+}
+
+header .logo h1 {
+    font-size: 24px;
+    color:white;
+}
+
+nav {
+    display: flex;
+    gap: 1px;
+}
+
+nav a {
+    text-decoration: none;
+    color: white;
+    padding: 10px 15px;
+    font-size: 16px;
+    display: block;
+}
+
+nav a:hover {
+    background-color: #1c2c3d;
+}
+
+nav a:not(:last-child) {
+    border-right: 1px solid white; /* Thin white lines separating the tabs */
+}
+
+/* Main Content Styles */
+main {
+    text-align: center;
+    padding: 20px;
+}
+
+h2 {
+    font-size: 28px;
+    color:#1c2c3d;
+}
+
+/* Footer Styles (Fixed at the bottom) */
+footer {
+    background-color: #2A3F54; /* Dark blue background matching header */
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px 20px;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    z-index: 1000;
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.2); /* Optional shadow effect */
+}
+
+footer p {
+    font-size: 14px;
+    color:white;
+}
+
+/* Content padding adjustment for footer */
+body {
+    padding-bottom: 40px; /* Ensures content doesn't get hidden under footer */
+}
+
+/* Compare Button */
+.compare-btn {
+	background: #28a745; /* Bright green color */
+	color: #fff;
+	display: inline-block;
+	text-transform: uppercase; /* Keep the text uppercase like the dropdown */
+	text-decoration: none;
+	font-family: Arial, Helvetica, sans-serif; /* Ensure the same font as dropdown menus */
+	font-size: 14px;
+	padding: 1em 2em; /* Padding similar to the dropdown buttons */
+	text-align: center;
+	border-radius: 0; /* Removes rounded corners */
+	transition: background-color 0.3s ease, transform 0.3s ease;
+	font-weight: bold; /* Optional: make the text bold */
+	width: 200px; /* Adjust width as desired */
+  }
+  
+  /* Darker green on hover */
+  .compare-btn:hover {
+	background: #e74c3c;
+	color: #fff;
+  }
+  
+  /* Even darker green when clicked */
+  .compare-btn:active {
+	background: #1e7e34;
+  }
+  
+  /* Center the Compare button */
+  .compare-btn-container {
+	display: flex;
+	justify-content: center; /* Center horizontally */
+  }  
+  
+/* Button Styling */
+.standard-btn {
+	background: #34495e; /* Matches the menu background */
+	color: #fff;
+	display: inline-block;
+	text-transform: uppercase; /* Uppercase text like the dropdown */
+	text-decoration: none;
+	font-family: Arial, Helvetica, sans-serif; /* Same font as dropdown */
+	font-size: 14px;
+	font-weight: bold; /* Bold text like dropdown items */
+	padding: 1em 2em; /* Similar padding as dropdown items */
+	text-align: center;
+	border-radius: 0; /* Remove rounded corners to keep edges sharp */
+	transition: background-color 0.3s ease; /* Transitions */
+	margin-bottom: 20px; /* Adjust margin to suit your design */
+  }
+  
+  .standard-btn:hover {
+	background: #e74c3c; /* Change to red color on hover like menu items */
+	color: #fff;
+  	cursor: pointer;
+  }
+  
+  .standard-btn:active {
+	background: #c0392b; /* Even darker red when clicked */
+  }
+  
+  /* Center the button */
+  .standard-btn-container {
+	display: flex;
+	justify-content: center; /* Center horizontally */
+  }
+
+/* CSS FOR TEAM/POSITION SELECT STYLE */
+
+/* Flex container to align items in a row */
+.menu-row {
+    display: flex;
+    align-items: center;
+	justify-content: center; /* Center the items horizontally */
+    gap: 10px; /* Space between elements */
+}
+
+/* Style for the VS text */
+.vs-text {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+/* Make sure each menu item doesn't break onto a new line */
+.menu {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.menu li {
+    display: inline-block;
+    margin-right: 10px; /* Optional: space between dropdowns */
+}
+
+/* Container for the output to organize each week's stats in a grid */
+#statsContainer {
+  min-height: 0px; /* Initial height to prevent layout shifting */
+  margin-top: 20px; /* Adds consistent spacing from the form */
+  text-align: center;
+  overflow: hidden; /* Prevents overflow until content is added */
+  transition: all 0.3s ease; /* Smooth transition for any size change */
+}
+
+/* When stats are displayed */
+#statsContainer.expanded {
+  min-height: 300px; /* Ensures enough space when content is added */
+  max-height: calc(100vh - 150px); /* Dynamically adjusts but prevents exceeding viewport */
+  overflow-y: auto; /* Allows scrolling for large content */
+}
+
+/* Adjust padding to ensure header and footer visibility */
+body {
+  padding-top: 60px; /* Leaves space for the fixed header */
+  padding-bottom: 60px; /* Leaves space for the fixed footer */
+  background-color: #ffffff; /* Maintains clean layout */
+}
+
+header, footer {
+  z-index: 1000; /* Ensures header and footer stay on top of other elements */
+}
+
+/* Style each week's stats group */
+.week-stats {
+    border: 1px solid #ccc;
+    padding: 10px;
+    border-radius: 5px;
+    width: 250px;
+    box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Style for each stat within a week */
+.week-stats p {
+    margin: 5px 0;
+    font-size: 14px;
+}
+#slash{
+	display: none;
+}
+
+
+
+
+
+
+
+
+
+
+
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+}
+
+h1 {
+  color: #333;
+}
+
+form {
+  margin-top: 20px;
+}
+
+label, input, button {
+  font-size: 1rem;
+  margin: 10px;
+}
+
+button {
+  padding: 0.5em 1em;
+  background-color: #28a745;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #218838;
+}
+
+#statsDisplay {
+  margin-top: 20px;
+  font-size: 1rem;
+  color: #555;
+}
+
+table {
+  width: 80%;
+  margin: 20px auto;
+  border-collapse: collapse;
+  font-size: 1rem;
+}
+
+th, td {
+  border: 1px solid #ddd;
+  padding: 10px;
+  text-align: left;
+}
+
+th {
+  background-color: #34495e;
+  color: white;
+}
+
+tr:nth-child(even) {
+  background-color: #f2f2f2;
+}
+
+tr:hover {
+  background-color: #ddd;
+}
+
+.dropdown {
+  position: relative;
+  width: 230px;
+  filter: url(#goo);
+
+  &__face,
+  &__items {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 25px;
+  }
+
+  &__face {
+    display: block;
+    position: relative;
+  }
+
+  &__items {
+    margin: 0;
+    position: absolute;
+    right: 0;
+    top: 50%;
+    width: 100%;
+    list-style: none;
+    list-style-type: none;
+    display: flex;
+    justify-content: space-between;
+    visibility: hidden;
+    z-index: -1;
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.93, 0.88, 0.1, 0.8);
+
+    &::before {
+      content: "";
+      background-color: #fff;
+      position: absolute;
+      bottom: 100%;
+      right: 20%;
+      height: 40px;
+      width: 20px;
+    }
+  }
+
+  &__arrow {
+    border-bottom: 2px solid #000;
+    border-right: 2px solid #000;
+    position: absolute;
+    top: 50%;
+    right: 30px;
+    width: 10px;
+    height: 10px;
+    transform: rotate(45deg) translateY(-50%);
+    transform-origin: right;
+  }
+
+  input {
+    display: none;
+
+    &:checked ~ .dropdown__items {
+      top: calc(100% + 25px);
+      visibility: visible;
+      opacity: 1;
+    }
+  }
+}
+
+body {
+  background-image: linear-gradient(140deg, #e2e2e2, #cdcdcd);
+  display: grid;
+  place-items: center;
+  font-family: "Lato", Arial, sans-serif;
+  height: 100vh;
+  margin: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+svg {
+  display: none;
+}
+
+@import url(https://fonts.googleapis.com/css?family=Open+Sans:400,700);
+
+body {
+  font-family: "Open Sans", "Arial";
+  background: #ffffff;
+}
+h2 {
+  color: #FFF;
+}
+h4 {
+  color: #666;
+}
+p {
+  color: #333;
+  font-size: 13px;
+}
+main {
+  width: 500px;
+}
+section {
+  background: #E3F9F9;
+  padding: 20px;
+  box-shadow: 0 3px 5px rgba(0,0,0,0.15);
+}
+
+.dropdown {
+  width: 230px;
+  display: inline-block;
+  margin-right: 10px;
+  position: relative;
+}
+
+.dropdown > a, .dropdown.toggle > label {
+  border-radius: 2px;
+  box-shadow: 0 6px 5px -5px rgba(0,0,0,0.3);
+}
+
+.dropdown > a::after, .dropdown.toggle > label::after {
+  content: "";
+  float: right;
+  margin: 15px 15px 0 0;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 10px solid #CCC;
+}
+
+.dropdown ul {
+  list-style-type: none;
+  display: block;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  width: 100%;
+  box-shadow: 0 6px 5px -5px rgba(0,0,0,0.3);
+  overflow: hidden;
+  max-height: 200px; /* Set max height */
+  overflow-y: auto; /* Enable vertical scrolling */
+}
+
+.dropdown a, .dropdown.toggle > label {
+  display: block;
+  padding: 0 0 0 10px;
+  text-decoration: none;
+  line-height: 40px;
+  font-size: 13px;
+  text-transform: uppercase;
+  font-weight: bold;
+  color: #999;
+  background-color: #FFF;
+}
+
+.dropdown li {
+  height: 0;
+  overflow: hidden;
+  transition: all 500ms;
+}
+
+.dropdown.hover li {
+  transition-delay: 300ms;
+}
+
+.dropdown li:first-child a {
+  border-radius: 2px 2px 0 0;
+}
+
+.dropdown li:last-child a {
+  border-radius: 0 0 2px 2px;
+}
+
+.dropdown li:first-child a::before {
+  content: "";
+  display: block;
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 10px solid #FFF;
+  margin: -10px 0 0 30px;
+}
+
+.dropdown a:hover, .dropdown.toggle > label:hover, .dropdown.toggle > input:checked ~ label {
+  background-color: #EEE;
+  color: #666;
+}
+
+.dropdown > a:hover::after, .dropdown.toggle > label:hover::after, .dropdown.toggle > input:checked ~ label::after {
+  border-top-color: #AAA;
+}
+
+.dropdown li:first-child a:hover::before {
+  border-bottom-color: #EEE;
+}
+
+.dropdown.hover:hover li, .dropdown.toggle > input:checked ~ ul li {          
+  height: 40px;
+}
+
+.dropdown.hover:hover li:first-child, .dropdown.toggle > input:checked ~ ul li:first-child {
+  padding-top: 15px;
+}
+
+.dropdown.hover {
+  display: inline-block;
+}
+
+/* Make the table wrapper scrollable on small screens */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+table td:nth-child(2) {
+  white-space: nowrap; /* Prevents wrapping */
+  overflow: hidden;    /* Ensures content doesn't overflow */
+  text-overflow: ellipsis; /* Adds "..." if content is too long */
+}
+
+
+/* Optionally, you can adjust font sizes and padding for smaller screens */
+@media (max-width: 768px) {
+  .table th, .table td {
+      padding: 8px; /* Reduce padding for smaller screens */
+      font-size: 12px; /* Adjust font size for mobile */
+  }
+
+  .x_panel {
+      padding: 10px;
+  }
+
+  .x_title h2 {
+      font-size: 1.2rem; /* Smaller title font on mobile */
+  }
+}
+
+/* General Reset */
+* {
+  margin: 0;
+  padding: 0;
+}
