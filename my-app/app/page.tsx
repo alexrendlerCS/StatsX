@@ -98,9 +98,14 @@ export default function Home() {
       setFeedbackSuccess("Thank you for your feedback!");
       setFeedback("");
       setEmail("");
-    } catch (err: any) {
-      setFeedbackError(err.message || "Failed to submit feedback.");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setFeedbackError(err.message || "Failed to submit feedback.");
+      } else {
+        setFeedbackError("Failed to submit feedback due to an unknown error.");
+      }
     }
+    
   };
 
   // Submit picks to Supabase
@@ -129,9 +134,14 @@ export default function Home() {
       setPicks("");
       setName("");
       fetchPicks();
-    } catch (err: any) {
-      setPicksError(err.message || "Failed to share picks.");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setFeedbackError(err.message || "Failed to submit feedback.");
+      } else {
+        setFeedbackError("Failed to submit feedback due to an unknown error.");
+      }
     }
+    
   };
 
   const fetchPicks = async () => {
