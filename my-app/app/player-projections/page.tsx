@@ -39,11 +39,16 @@ export default function PlayerProjections() {
   const [fetchTriggered, setFetchTriggered] = useState(false); // Tracks whether projections should be fetched
    // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [error, setError] = useState<string | null>(null); // Error state
+    
+  // Utility function to normalize strings
+  const normalizeString = (str) =>
+    str
+      .toLowerCase()
+      .replace(/[-.`'’]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
   
-  const normalizedPlayerName = playerName
-    .trim()
-    .toLowerCase()
-    .replace(/[-.`']/g, "");
+  const normalizedPlayerName = normalizeString(playerName);
 
   const relevantStats = {
     QB: [
@@ -84,12 +89,6 @@ export default function PlayerProjections() {
       { label: "Rushing TDs", key: "rushing_tds" },
     ],
   };
-
-  const normalizeString = (str) =>
-    str
-      .toLowerCase()
-      .replace(/[-.`']/g, "") // Removes problematic characters
-      .trim();
 
   useEffect(() => {
     if (fetchTriggered && playerName.trim()) {
@@ -133,25 +132,28 @@ export default function PlayerProjections() {
       try {
         const response = await fetch("/PlayerProps.csv");
         const csvText = await response.text();
-
+  
         Papa.parse(csvText, {
           header: true,
           skipEmptyLines: true,
           complete: (result) => {
             const lines = {};
+  
             result.data.forEach((row) => {
-              const player = row.description
-                .trim()
-                .toLowerCase()
-                .replace(/[-.`']/g, "");
-              const stat = row.market.trim();
-              const line = row.point || "N/A";
-
-              if (!lines[player]) lines[player] = {};
-              if (!lines[player][stat]) {
-                lines[player][stat] = line;
-              }
+              const originalPlayerName = row.description;
+              const normalizedPlayerName = normalizeString(originalPlayerName); // Normalize name
+              const statKey = row.market.trim();
+              const lineValue = row.point || "N/A";
+  
+              // Debugging output
+              console.log(`Original: "${originalPlayerName}" -> Normalized: "${normalizedPlayerName}"`);
+  
+              // Store values in normalized structure
+              if (!lines[normalizedPlayerName]) lines[normalizedPlayerName] = {};
+              lines[normalizedPlayerName][statKey] = lineValue;
             });
+  
+            console.log("Parsed Lines with Normalized Keys:", Object.keys(lines));
             setPlayerLines(lines);
           },
         });
@@ -159,10 +161,10 @@ export default function PlayerProjections() {
         console.error("Error fetching player lines:", error.message);
       }
     };
-
+  
     fetchPlayerLines();
   }, []);
-
+  
   const fetchWeeklyStats = async () => {
     if (!playerName.trim()) {
       console.warn("Player name is not set or invalid.");
@@ -184,7 +186,7 @@ export default function PlayerProjections() {
         .select(
           "week, rushing_yards, receiving_yards, rushing_tds, receiving_tds, passing_yards, passing_attempts, completions, passing_tds, interceptions, rushing_attempts, receptions"
         )
-        .ilike("player_name", `%${normalizedName}%`); // Case-insensitive match for player name
+        .eq("normalized_name", normalizedPlayerName);
 
       if (error) {
         console.error("Error fetching weekly stats:", error.message);
@@ -759,10 +761,10 @@ export default function PlayerProjections() {
                 </thead>
                 <tbody>
                   {relevantStats[position]?.map((stat) => {
-                    const normalizedPlayerName = playerName
-                      .trim()
-                      .toLowerCase();
+                    const normalizedPlayerName = normalizeString(playerName);
                     const mappedStatKey = mapStatToMarket(stat.label);
+                    console.log("Normalized Player Name:", normalizedPlayerName);
+                    console.log("Available Keys in Player Lines:", Object.keys(playerLines));
                     let playerLine =
                       playerLines[normalizedPlayerName]?.[mappedStatKey] ||
                       "N/A";
@@ -795,7 +797,7 @@ export default function PlayerProjections() {
                         projectionColor = "text-red-500 font-bold";
                       }
                     }
-
+                    
                     return (
                       <tr
                         key={stat.key}

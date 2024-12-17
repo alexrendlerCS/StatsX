@@ -62,7 +62,7 @@ export default function PlayerStats() {
       const { data: playerAverages, error } = await supabase
         .from("player_averages")
         .select("*")
-        .ilike("player_name", `%${normalizedPlayerName}%`);
+        .eq("normalized_name", normalizedPlayerName);
 
       if (error) {
         console.error("Error fetching player averages:", error.message);
@@ -108,7 +108,7 @@ export default function PlayerStats() {
       const { data: weeklyStats, error: statsError } = await supabase
         .from("player_stats")
         .select("*")
-        .ilike("player_name", `%${normalizedPlayerName}%`);
+        .eq("normalized_name", normalizedPlayerName);
 
       if (statsError) {
         console.error("Error fetching weekly stats:", statsError.message);
@@ -219,7 +219,7 @@ export default function PlayerStats() {
           Player Stats
         </h1>
       </div>
-  
+
       <Card className="bg-gray-800 border-blue-400">
         <CardHeader>
           <CardTitle className="text-blue-400 flex items-center space-x-2">
@@ -266,7 +266,7 @@ export default function PlayerStats() {
           </form>
         </CardContent>
       </Card>
-  
+
       {/* Conditionally render sections */}
       {searchPerformed && (
         <>
@@ -278,135 +278,160 @@ export default function PlayerStats() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-              <div className="space-y-4 p-4">
-  {["RB", "WR", "TE"].includes(position) ? (
-    <>
-      {/* Common Stats for RB, WR, TE */}
-      {["rushing_attempts", "rushing_yards", "receptions", "receiving_yards"].map((statKey) => {
-        const statLabelMap = {
-          rushing_attempts: "Rushing Attempts",
-          rushing_yards: "Rushing Yards",
-          receptions: "Receptions",
-          receiving_yards: "Receiving Yards",
-        };
+                <div className="space-y-4 p-4">
+                  {["RB", "WR", "TE"].includes(position) ? (
+                    <>
+                      {/* Common Stats for RB, WR, TE */}
+                      {[
+                        "rushing_attempts",
+                        "rushing_yards",
+                        "receptions",
+                        "receiving_yards",
+                      ].map((statKey) => {
+                        const statLabelMap = {
+                          rushing_attempts: "Rushing Attempts",
+                          rushing_yards: "Rushing Yards",
+                          receptions: "Receptions",
+                          receiving_yards: "Receiving Yards",
+                        };
 
-        return (
-          <div key={statKey}>
-            {/* Average Stat */}
-            <div className="flex justify-between items-center">
-              <span className="text-gray-300 font-semibold">
-                Average {statLabelMap[statKey]}
-              </span>
-              <span className="text-blue-400 text-xl font-bold">
-                {(averages[statKey] || 0).toFixed(1)}
-              </span>
-            </div>
+                        return (
+                          <div key={statKey}>
+                            {/* Average Stat */}
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-300 font-semibold">
+                                Average {statLabelMap[statKey]}
+                              </span>
+                              <span className="text-blue-400 text-xl font-bold">
+                                {(averages[statKey] || 0).toFixed(1)}
+                              </span>
+                            </div>
 
-            {/* Last 3 Stat (% diff) */}
-            <div className="flex justify-between items-center">
-              <span className="text-gray-300 font-semibold">
-                Last 3 {statLabelMap[statKey]} (% diff)
-              </span>
-              <span
-                className={`text-xl font-bold ${
-                  stats.length >= 3
-                    ? getPercentageColor(
-                        calculatePercentageDiff(
-                          stats
-                            .slice(-3)
-                            .reduce((sum, stat) => sum + (stat[statKey] || 0), 0) / 3,
-                          averages[statKey] || 0
-                        )
-                      )
-                    : "text-gray-400"
-                }`}
-              >
-                {stats.length >= 3
-                  ? formatPercentage(
-                      calculatePercentageDiff(
-                        stats
-                          .slice(-3)
-                          .reduce((sum, stat) => sum + (stat[statKey] || 0), 0) / 3,
-                        averages[statKey] || 0
-                      )
-                    )
-                  : "N/A"}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-    </>
-  ) : position === "QB" ? (
-    <>
-      {/* Common Stats for QB */}
-      {["passing_attempts", "completions", "passing_yards", "rushing_yards", "rushing_attempts"].map((statKey) => {
-        const statLabelMap = {
-          passing_attempts: "Passing Attempts",
-          completions: "Completions",
-          passing_yards: "Passing Yards",
-          rushing_yards: "Rushing Yards",
-          rushing_attempts: "Rushing Attempts",
-        };
+                            {/* Last 3 Stat (% diff) */}
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-300 font-semibold">
+                                Last 3 {statLabelMap[statKey]} (% diff)
+                              </span>
+                              <span
+                                className={`text-xl font-bold ${
+                                  stats.length >= 3
+                                    ? getPercentageColor(
+                                        calculatePercentageDiff(
+                                          stats
+                                            .slice(-3)
+                                            .reduce(
+                                              (sum, stat) =>
+                                                sum + (stat[statKey] || 0),
+                                              0
+                                            ) / 3,
+                                          averages[statKey] || 0
+                                        )
+                                      )
+                                    : "text-gray-400"
+                                }`}
+                              >
+                                {stats.length >= 3
+                                  ? formatPercentage(
+                                      calculatePercentageDiff(
+                                        stats
+                                          .slice(-3)
+                                          .reduce(
+                                            (sum, stat) =>
+                                              sum + (stat[statKey] || 0),
+                                            0
+                                          ) / 3,
+                                        averages[statKey] || 0
+                                      )
+                                    )
+                                  : "N/A"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  ) : position === "QB" ? (
+                    <>
+                      {/* Common Stats for QB */}
+                      {[
+                        "passing_attempts",
+                        "completions",
+                        "passing_yards",
+                        "rushing_yards",
+                        "rushing_attempts",
+                      ].map((statKey) => {
+                        const statLabelMap = {
+                          passing_attempts: "Passing Attempts",
+                          completions: "Completions",
+                          passing_yards: "Passing Yards",
+                          rushing_yards: "Rushing Yards",
+                          rushing_attempts: "Rushing Attempts",
+                        };
 
-        return (
-          <div key={statKey}>
-            {/* Average Stat */}
-            <div className="flex justify-between items-center">
-              <span className="text-gray-300 font-semibold">
-                Average {statLabelMap[statKey]}
-              </span>
-              <span className="text-blue-400 text-xl font-bold">
-                {(averages[statKey] || 0).toFixed(1)}
-              </span>
-            </div>
+                        return (
+                          <div key={statKey}>
+                            {/* Average Stat */}
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-300 font-semibold">
+                                Average {statLabelMap[statKey]}
+                              </span>
+                              <span className="text-blue-400 text-xl font-bold">
+                                {(averages[statKey] || 0).toFixed(1)}
+                              </span>
+                            </div>
 
-            {/* Last 3 Stat (% diff) */}
-            <div className="flex justify-between items-center">
-              <span className="text-gray-300 font-semibold">
-                Last 3 {statLabelMap[statKey]} (% diff)
-              </span>
-              <span
-                className={`text-xl font-bold ${
-                  stats.length >= 3
-                    ? getPercentageColor(
-                        calculatePercentageDiff(
-                          stats
-                            .slice(-3)
-                            .reduce((sum, stat) => sum + (stat[statKey] || 0), 0) / 3,
-                          averages[statKey] || 0
-                        )
-                      )
-                    : "text-gray-400"
-                }`}
-              >
-                {stats.length >= 3
-                  ? formatPercentage(
-                      calculatePercentageDiff(
-                        stats
-                          .slice(-3)
-                          .reduce((sum, stat) => sum + (stat[statKey] || 0), 0) / 3,
-                        averages[statKey] || 0
-                      )
-                    )
-                  : "N/A"}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-    </>
-  ) : (
-    <p className="text-gray-400 text-center">
-      Select a valid position (RB, WR, TE, QB) to see stats.
-    </p>
-  )}
-</div>
-
-
-          </CardContent>
+                            {/* Last 3 Stat (% diff) */}
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-300 font-semibold">
+                                Last 3 {statLabelMap[statKey]} (% diff)
+                              </span>
+                              <span
+                                className={`text-xl font-bold ${
+                                  stats.length >= 3
+                                    ? getPercentageColor(
+                                        calculatePercentageDiff(
+                                          stats
+                                            .slice(-3)
+                                            .reduce(
+                                              (sum, stat) =>
+                                                sum + (stat[statKey] || 0),
+                                              0
+                                            ) / 3,
+                                          averages[statKey] || 0
+                                        )
+                                      )
+                                    : "text-gray-400"
+                                }`}
+                              >
+                                {stats.length >= 3
+                                  ? formatPercentage(
+                                      calculatePercentageDiff(
+                                        stats
+                                          .slice(-3)
+                                          .reduce(
+                                            (sum, stat) =>
+                                              sum + (stat[statKey] || 0),
+                                            0
+                                          ) / 3,
+                                        averages[statKey] || 0
+                                      )
+                                    )
+                                  : "N/A"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  ) : (
+                    <p className="text-gray-400 text-center">
+                      Select a valid position (RB, WR, TE, QB) to see stats.
+                    </p>
+                  )}
+                </div>
+              </CardContent>
             </Card>
-  
+
             <Card className="bg-gradient-to-bl from-gray-800 via-gray-900 to-black border border-blue-500 shadow-lg rounded-lg">
               <CardHeader>
                 <CardTitle className="text-blue-400 text-2xl font-bold flex items-center">
@@ -414,87 +439,88 @@ export default function PlayerStats() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-            {/* Dropdown for selecting the stat */}
-            <div className="mb-4">
-              <label className="text-gray-400">Select Stat:</label>
-              <select
-                className="w-full bg-gray-700 text-gray-100 border-gray-600 rounded px-4 py-2"
-                value={selectedStat}
-                onChange={(e) => setSelectedStat(e.target.value)}
-              >
-                <option value="receiving_yards">Receiving Yards</option>
-                <option value="rushing_yards">Rushing Yards</option>
-                <option value="receptions">Receptions</option>
-                <option value="rushing_attempts">Rushing Attempts</option>
-                <option value="passing_yards">Passing Yards</option>
-                <option value="passing_attempts">Passing Attempts</option>
-                <option value="completions">Completions</option>
-              </select>
-            </div>
+                {/* Dropdown for selecting the stat */}
+                <div className="mb-4">
+                  <label className="text-gray-400">Select Stat:</label>
+                  <select
+                    className="w-full bg-gray-700 text-gray-100 border-gray-600 rounded px-4 py-2"
+                    value={selectedStat}
+                    onChange={(e) => setSelectedStat(e.target.value)}
+                  >
+                    <option value="receiving_yards">Receiving Yards</option>
+                    <option value="rushing_yards">Rushing Yards</option>
+                    <option value="receptions">Receptions</option>
+                    <option value="rushing_attempts">Rushing Attempts</option>
+                    <option value="passing_yards">Passing Yards</option>
+                    <option value="passing_attempts">Passing Attempts</option>
+                    <option value="completions">Completions</option>
+                  </select>
+                </div>
 
-            {/* Input for user-defined line */}
-            <div className="mb-4">
-              <label className="text-gray-400">Select a Line:</label>
-              <input
-                type="number"
-                className="w-full bg-gray-700 text-gray-100 border-gray-600 rounded px-4 py-2"
-                value={customValue ?? ""} // Fallback to empty string if null
-                onChange={(e) => setCustomValue(Number(e.target.value) || 0)}
-                placeholder="Enter a value"
-              />
-            </div>
+                {/* Input for user-defined line */}
+                <div className="mb-4">
+                  <label className="text-gray-400">Select a Line:</label>
+                  <input
+                    type="number"
+                    className="w-full bg-gray-700 text-gray-100 border-gray-600 rounded px-4 py-2"
+                    value={customValue ?? ""} // Fallback to empty string if null
+                    onChange={(e) =>
+                      setCustomValue(Number(e.target.value) || 0)
+                    }
+                    placeholder="Enter a value"
+                  />
+                </div>
 
-            {/* Line Chart */}
-            <LineChart
-              width={300}
-              height={200}
-              data={stats.map((row) => ({
-                week: `Week ${row.week}`,
-                weeklyValue: row[selectedStat] || 0, // Weekly value for selected stat
-                averageValue: averages[selectedStat]
-                  ? Math.round(averages[selectedStat] * 10) / 10 // Rounded to 1 decimal
-                  : 0,
-                customValue: customValue || null, // User-defined value
-              }))}
-              className="mx-auto"
-              margin={{ top: 5, right: 20, bottom: 5, left: 0 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="week" stroke="#8884d8" />
-              <YAxis stroke="#8884d8" />
-              <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="weeklyValue"
-                stroke="#82ca9d"
-                strokeWidth={2}
-                dot
-                name="Weekly Value"
-              />
-              <Line
-                type="monotone"
-                dataKey="averageValue"
-                stroke="#8884d8"
-                strokeWidth={2}
-                dot={false}
-                name="Average Value"
-              />
-              {customValue && (
-                <Line
-                  type="monotone"
-                  dataKey="customValue"
-                  stroke="#ff7300"
-                  strokeWidth={2}
-                  dot={false}
-                  name="Custom Value"
-                />
-              )}
-            </LineChart>
-          </CardContent>
-
+                {/* Line Chart */}
+                <LineChart
+                  width={300}
+                  height={200}
+                  data={stats.map((row) => ({
+                    week: `Week ${row.week}`,
+                    weeklyValue: row[selectedStat] || 0, // Weekly value for selected stat
+                    averageValue: averages[selectedStat]
+                      ? Math.round(averages[selectedStat] * 10) / 10 // Rounded to 1 decimal
+                      : 0,
+                    customValue: customValue || null, // User-defined value
+                  }))}
+                  className="mx-auto"
+                  margin={{ top: 5, right: 20, bottom: 5, left: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="week" stroke="#8884d8" />
+                  <YAxis stroke="#8884d8" />
+                  <Tooltip />
+                  <Line
+                    type="monotone"
+                    dataKey="weeklyValue"
+                    stroke="#82ca9d"
+                    strokeWidth={2}
+                    dot
+                    name="Weekly Value"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="averageValue"
+                    stroke="#8884d8"
+                    strokeWidth={2}
+                    dot={false}
+                    name="Average Value"
+                  />
+                  {customValue && (
+                    <Line
+                      type="monotone"
+                      dataKey="customValue"
+                      stroke="#ff7300"
+                      strokeWidth={2}
+                      dot={false}
+                      name="Custom Value"
+                    />
+                  )}
+                </LineChart>
+              </CardContent>
             </Card>
           </div>
-  
+
           <Card className="bg-gradient-to-br from-gray-800 via-gray-900 to-black border border-blue-500 shadow-lg rounded-lg">
             <CardHeader>
               <CardTitle className="text-blue-400 text-2xl font-bold flex items-center">
@@ -535,7 +561,9 @@ export default function PlayerStats() {
                                 col.key
                               )}`}
                             >
-                              {row[col.key] !== undefined ? row[col.key] : "N/A"}
+                              {row[col.key] !== undefined
+                                ? row[col.key]
+                                : "N/A"}
                             </td>
                           ))}
                         </tr>
@@ -550,5 +578,4 @@ export default function PlayerStats() {
       )}
     </div>
   );
-  
 }

@@ -124,24 +124,34 @@ def fetch_player_stats(season, week):
 
 def merge_stats(scraped_data, api_data, team_mapping):
     """Merge API fields (`snaps`, `team_id`, `opponent`) into scraped data using API."""
+    
+    # Manual correction for mismatched team abbreviations
+    abbreviation_fixes = {
+        "JAX": "JAC"  # Map JAX (API) to JAC (database)
+    }
+
     merged_data = []
     for player in scraped_data:
-        api_player = next((p for p in api_data if p['Name'] == player['player_name']), None)
-        if api_player:
-            # Update only API-specific fields
-            player['snaps'] = api_player.get('Played', 0)
-            player['team_id'] = team_mapping.get(api_player.get('Team'))
-            player['opponent'] = api_player.get('Opponent')
+        # Fix team abbreviation for comparison
+        for api_player in api_data:
+            team_abbr = api_player.get("Team")
+            corrected_team_abbr = abbreviation_fixes.get(team_abbr, team_abbr)
+            if api_player["Name"] == player["player_name"]:
+                player['snaps'] = api_player.get('Played', 0)
+                player['team_id'] = team_mapping.get(corrected_team_abbr)
+                player['opponent'] = api_player.get('Opponent')
+                break
         else:
-            # Attempt to infer `team_id` from matchup or position
+            # Player not found in API
             print(f"Player {player['player_name']} not found in API data. Excluding from upload.")
-            continue  # Exclude players without `team_id`
+            continue
         
         # Ensure `team_id` is not None
         if player['team_id']:
             merged_data.append(player)
 
     return merged_data
+
 
 
 def upload_to_database(player_data):
