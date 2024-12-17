@@ -8,65 +8,70 @@ import Link from "next/link";
 import { BarChart3, TrendingUp, Users, Shield, Send } from "lucide-react";
 import { useState, useEffect } from "react";
 import supabase from "./supabaseClient";
-import { ThumbsUp, ThumbsDown } from "lucide-react";
-
 
 export default function Home() {
-  const [feedback, setFeedback] = useState(""); // Feedback content
-  const [email, setEmail] = useState(""); // Feedback email
-  const [picks, setPicks] = useState(""); // Picks content
-  const [name, setName] = useState(""); // Name for sharing picks
+  const [feedback, setFeedback] = useState(""); // For feedback input
+  const [email, setEmail] = useState(""); // For feedback email
+  const [feedbackSuccess, setFeedbackSuccess] = useState(""); // For feedback success message
+  const [feedbackError, setFeedbackError] = useState(""); // For feedback error message
+  const [name, setName] = useState(""); // For user name
+  const [playerName, setPlayerName] = useState(""); // For player name dropdown
+  const [stat, setStat] = useState(""); // For stats dropdown
+  const [reason, setReason] = useState(""); // For user comments input
+  const [picksList, setPicksList] = useState([]); // Submitted picks
+  const [value, setValue] = useState(""); // User-entered stat value
+  const [picksSuccess, setPicksSuccess] = useState(""); // For picks success message
+  const [picksError, setPicksError] = useState(""); // For picks error message
+  const [overUnder, setOverUnder] = useState(""); // Over/Under selection
+  const [suggestions, setSuggestions] = useState([]); // Player name suggestions
 
-  // Success/Error messages for Feedback Form
-  const [feedbackSuccess, setFeedbackSuccess] = useState("");
-  const [feedbackError, setFeedbackError] = useState("");
 
-  // Success/Error messages for Share Picks Form
-  const [picksSuccess, setPicksSuccess] = useState("");
-  const [picksError, setPicksError] = useState("");
+  const relevantStats = [
+    "Rushing Attempts",
+    "Rushing Yards",
+    "Rushing TDs",
+    "Receptions",
+    "Receiving Yards",
+    "Receiving TDs",
+    "Passing Attempts",
+    "Completions",
+    "Passing Yards",
+    "Passing TDs",
+    "Interceptions",
+  ];
 
-  const [picksList, setPicksList] = useState([]); // Display submitted picks
-  
+  const normalizeString = (str) =>
+    str
+      .toLowerCase()
+      .replace(/[-.`']/g, "")
+      .trim();
 
-  const handleVote = async (pickId, type) => {
+  // Fetch player suggestions
+  const fetchSuggestions = async (query) => {
+    if (!query) {
+      setSuggestions([]);
+      return;
+    }
     try {
-      const userId = "user-unique-id"; // Replace this with a real unique identifier for the user (e.g., Supabase Auth user.id)
-  
-      // Check if the user has already voted
-      const { data: existingVote, error: checkError } = await supabase
-        .from("picks_votes")
-        .select("id, vote_type")
-        .eq("pick_id", pickId)
-        .eq("user_id", userId)
-        .single();
-  
-      if (checkError && checkError.code !== "PGRST116") {
-        console.error("Error checking vote:", checkError.message);
-        return;
-      }
-  
-      // Start the voting logic
-      if (!existingVote) {
-        // User hasn't voted yet
-        await supabase.from("picks_votes").insert([{ pick_id: pickId, user_id: userId, vote_type: type }]);
-  
-        // Increment the correct column
-        const columnToIncrement = type === "upvote" ? "upvotes" : "downvotes";
-        await supabase.rpc("increment_vote", { id: pickId, column: columnToIncrement });
-      } else if (existingVote.vote_type !== type) {
-        // User switches votes
-        await supabase.from("picks_votes").update({ vote_type: type }).eq("id", existingVote.id);
-  
-        // Adjust upvotes and downvotes
-        await supabase.rpc("adjust_votes", { id: pickId, new_vote: type, old_vote: existingVote.vote_type });
-      }
-  
-      fetchPicks(); // Refresh the picks list
-    } catch (error) {
-      console.error("Error handling vote:", error.message);
+      const { data, error } = await supabase
+        .from("player_list")
+        .select("player_name");
+      if (error) throw error;
+
+      console.log("Supabase Data:", data); // Debugging
+
+      const matchingPlayers = data.filter((player) =>
+        normalizeString(player.player_name).includes(normalizeString(query))
+      );
+
+      console.log("Matching Players:", matchingPlayers); // Debugging
+
+      setSuggestions(matchingPlayers.map((p) => p.player_name));
+    } catch (err) {
+      console.error("Error fetching player suggestions:", err.message);
     }
   };
-  
+
   // Submit feedback to Supabase
   const handleSubmitFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,9 +92,9 @@ export default function Home() {
 
     try {
       // Save feedback to Supabase
-      const { error } = await supabase.from("feedback").insert([
-        { content: feedback, email: email.trim() || null },
-      ]);
+      const { error } = await supabase
+        .from("feedback")
+        .insert([{ content: feedback, email: email.trim() || null }]);
 
       if (error) {
         throw new Error(error.message);
@@ -105,68 +110,66 @@ export default function Home() {
         setFeedbackError("Failed to submit feedback due to an unknown error.");
       }
     }
-    
   };
 
-  // Submit picks to Supabase
-  const handleSubmitPicks = async (e: React.FormEvent) => {
+  const handleSubmitPick = async (e) => {
     e.preventDefault();
     setPicksSuccess("");
     setPicksError("");
 
-    // Validate picks input
-    if (!picks.trim() || !name.trim()) {
-      setPicksError("Please enter your name and picks.");
+    if (!name || !playerName || !stat || !value || !overUnder || !reason) {
+      setPicksError("All fields are required.");
       return;
     }
 
     try {
-      // Save picks to Supabase
       const { error } = await supabase.from("picks").insert([
-        { name: name.trim(), content: picks.trim() },
+        {
+          name: name.trim(),
+          player_name: playerName.trim(),
+          stat: stat.trim(),
+          value: parseFloat(value).toFixed(1),
+          over_under: overUnder,
+          reason: reason.trim(),
+          created_at: new Date(),
+        },
       ]);
 
-      if (error) {
-        throw new Error(error.message);
-      }
+      if (error) throw error;
 
-      setPicksSuccess("Your picks have been shared!");
-      setPicks("");
+      setPicksSuccess("Your pick has been submitted successfully!");
       setName("");
+      setPlayerName("");
+      setStat("");
+      setValue("");
+      setOverUnder("");
+      setReason("");
       fetchPicks();
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setFeedbackError(err.message || "Failed to submit feedback.");
-      } else {
-        setFeedbackError("Failed to submit feedback due to an unknown error.");
-      }
+    } catch (err) {
+      setPicksError(`Failed to submit pick: ${err.message}`);
     }
-    
   };
 
-  const fetchPicks = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("picks")
-        .select("id, name, content, upvotes, downvotes, created_at")
-        .order("created_at", { ascending: false });
-  
-      if (error) {
-        console.error("Error fetching picks:", error.message);
-        return;
-      }
-  
-      setPicksList(data || []); // Update state
-    } catch (err) {
-      console.error("Error in fetchPicks:", err.message);
-    }
-  };
-  
-  
   useEffect(() => {
     fetchPicks();
   }, []);
 
+  // Fetch submitted picks
+  const fetchPicks = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("picks")
+        .select(
+          "id, name, player_name, stat, value, over_under, reason, created_at"
+        )
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setPicksList(data);
+    } catch (err) {
+      console.error("Error fetching picks:", err.message);
+    }
+  };
   return (
     <div className="space-y-12">
       <section className="text-center space-y-4">
@@ -279,6 +282,140 @@ export default function Home() {
           </Card>
         </div>
       </section>
+      {/* Share Picks Section */}
+      <section className="space-y-6">
+        <h2 className="text-3xl font-bold text-center text-blue-400">
+          Share Your Picks
+        </h2>
+        <Card className="bg-gray-800 border-blue-400">
+          <CardContent className="p-6 space-y-4">
+            <form onSubmit={handleSubmitPick} className="space-y-4">
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your Name"
+                className="bg-gray-700 text-gray-100 border-gray-600"
+              />
+               <div className="relative">
+              <Input
+                value={playerName}
+                onChange={(e) => {
+                  setPlayerName(e.target.value);
+                  fetchSuggestions(e.target.value);
+                }}
+                placeholder="Player Name"
+                className="bg-gray-700 text-gray-100 border-gray-600"
+              />
+              {suggestions.length > 0 && (
+                <ul className="absolute z-10 bg-gray-700 w-full mt-1 rounded-lg shadow-lg">
+                  {suggestions.map((suggestion, index) => (
+                    <li
+                      key={index}
+                      onClick={() => {
+                        setPlayerName(suggestion);
+                        setSuggestions([]); // Clear suggestions
+                      }}
+                      className="px-4 py-2 text-gray-100 cursor-pointer hover:bg-gray-600"
+                    >
+                      {suggestion}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+              <select
+                value={stat}
+                onChange={(e) => setStat(e.target.value)}
+                className="w-full bg-gray-700 text-gray-100 border-gray-600 rounded-lg px-4 py-2"
+              >
+                <option value="" disabled>
+                  Select Stat
+                </option>
+                {relevantStats.map((statOption, index) => (
+                  <option key={index} value={statOption}>
+                    {statOption}
+                  </option>
+                ))}
+              </select>
+              <Input
+                type="number"
+                step="0.1"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder="Enter stat value"
+                className="bg-gray-700 text-gray-100 border-gray-600"
+              />
+              <select
+                value={overUnder}
+                onChange={(e) => setOverUnder(e.target.value)}
+                className="w-full bg-gray-700 text-gray-100 border-gray-600 rounded-lg px-4 py-2"
+              >
+                <option value="" disabled>
+                  Select Over/Under
+                </option>
+                <option value="Over">Over</option>
+                <option value="Under">Under</option>
+              </select>
+              <Textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Why do you like this pick?"
+                className="w-full bg-gray-700 text-gray-100 border-gray-600"
+              />
+              <Button type="submit" className="w-full bg-green-600">
+                Share Pick
+              </Button>
+            </form>
+            {picksSuccess && <p className="text-green-400">{picksSuccess}</p>}
+            {picksError && <p className="text-red-400">{picksError}</p>}
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* Submitted Picks Section */}
+      <section className="space-y-6">
+  <h2 className="text-3xl font-bold text-center text-blue-400">User Picks</h2>
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {picksList.length > 0 ? (
+      picksList.map((item) => (
+        <Card
+          key={item.id}
+          className="bg-gray-800 border-gray-700 hover:border-blue-400 transition shadow-md"
+        >
+          <CardHeader className="pb-2">
+            {/* Player Name - Blue and Prominent */}
+            <p className="text-2xl font-bold text-blue-400">{item.player_name}</p>
+          </CardHeader>
+          <CardContent className="space-y-2 relative">
+            {/* Over/Under with Value and Stat */}
+            <p className="text-2xl font-semibold">
+              <span
+                className={
+                  item.over_under === "Over"
+                    ? "text-green-400 font-bold"
+                    : "text-red-400 font-bold"
+                }
+              >
+                {item.over_under}
+              </span>{" "}
+              <span className="text-white">
+                {item.value} {item.stat}
+              </span>
+            </p>
+            {/* Reason */}
+            <p className="text-gray-400 italic mt-2">{item.reason}</p>
+            {/* User Name at Bottom Right */}
+            <p className="text-white absolute bottom-2 right-4">
+              - {item.name}
+            </p>
+          </CardContent>
+        </Card>
+      ))
+    ) : (
+      <p className="text-gray-400 text-center">No picks shared yet.</p>
+    )}
+  </div>
+</section>
 
       <section className="space-y-6">
         <h2 className="text-3xl font-bold text-center text-blue-400">
@@ -317,7 +454,10 @@ export default function Home() {
           <CardContent className="p-6">
             <form onSubmit={handleSubmitFeedback} className="space-y-4">
               <div>
-                <label htmlFor="feedback" className="block text-sm font-medium text-gray-400 mb-1">
+                <label
+                  htmlFor="feedback"
+                  className="block text-sm font-medium text-gray-400 mb-1"
+                >
                   Your Feedback
                 </label>
                 <Textarea
@@ -329,7 +469,10 @@ export default function Home() {
                 />
               </div>
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-400 mb-1">
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium text-gray-400 mb-1"
+                >
                   Your Email (optional)
                 </label>
                 <Input
@@ -341,111 +484,24 @@ export default function Home() {
                   className="w-full bg-gray-700 text-gray-100 border-gray-600"
                 />
               </div>
-              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+              <Button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              >
                 Submit Feedback
                 <Send className="ml-2 h-4 w-4" />
               </Button>
             </form>
-            {feedbackSuccess && <p className="text-green-400 mt-4">{feedbackSuccess}</p>}
-            {feedbackError && <p className="text-red-400 mt-4">{feedbackError}</p>}
+
+            {feedbackSuccess && (
+              <p className="text-green-400 mt-4">{feedbackSuccess}</p>
+            )}
+            {feedbackError && (
+              <p className="text-red-400 mt-4">{feedbackError}</p>
+            )}
           </CardContent>
         </Card>
       </section>
-
-      {/* Share Your Picks Form */}
-      <section className="space-y-6">
-        <h2 className="text-3xl font-bold text-center text-blue-400">
-          Share Your Picks
-        </h2>
-        <Card className="bg-gray-800 border-blue-400">
-          <CardContent className="p-6">
-            <form onSubmit={handleSubmitPicks} className="space-y-4">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-400 mb-1">
-                  Your Name
-                </label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your name"
-                  className="w-full bg-gray-700 text-gray-100 border-gray-600"
-                />
-              </div>
-              <div>
-                <label htmlFor="picks" className="block text-sm font-medium text-gray-400 mb-1">
-                  Your Picks
-                </label>
-                <Textarea
-                  id="picks"
-                  value={picks}
-                  onChange={(e) => setPicks(e.target.value)}
-                  placeholder="Share your weekly picks..."
-                  className="w-full bg-gray-700 text-gray-100 border-gray-600"
-                />
-              </div>
-              <Button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white">
-                Share Picks
-                <Send className="ml-2 h-4 w-4" />
-              </Button>
-            </form>
-            {picksSuccess && <p className="text-green-400 mt-4">{picksSuccess}</p>}
-            {picksError && <p className="text-red-400 mt-4">{picksError}</p>}
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* Display Shared Picks */}
-      <section className="space-y-6">
-    <h2 className="text-3xl font-bold text-center text-blue-400">
-      Submitted Picks
-    </h2>
-    <Card className="bg-gray-800 border-blue-400">
-      <CardContent className="p-6 space-y-4">
-        {picksList.length > 0 ? (
-          picksList.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between border-b border-gray-700 pb-2 mb-2"
-            >
-              {/* Left side: User Name and Content */}
-              <div>
-                <p className="text-blue-400 font-bold">{item.name}</p>
-                <p className="text-gray-300">{item.content}</p>
-                <p className="text-gray-500 text-sm">
-                  <strong>Shared at:</strong>{" "}
-                  {new Date(item.created_at).toLocaleString()}
-                </p>
-              </div>
-
-              {/* Right side: Thumbs Up/Down and Vote Counts */}
-              <div className="flex items-center space-x-4">
-                {/* Upvote */}
-                <button
-                  onClick={() => handleVote(item.id, "upvote")}
-                  className="flex items-center space-x-1 text-green-400 hover:text-green-300"
-                >
-                  <ThumbsUp className="w-5 h-5" />
-                  <span className="text-white">{item.upvotes || 0}</span>
-                </button>
-
-                {/* Downvote */}
-                <button
-                  onClick={() => handleVote(item.id, "downvote")}
-                  className="flex items-center space-x-1 text-red-400 hover:text-red-300"
-                >
-                  <ThumbsDown className="w-5 h-5" />
-                  <span className="text-white">{item.downvotes || 0}</span>
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="text-gray-400">No picks shared yet.</p>
-        )}
-      </CardContent>
-    </Card>
-  </section>
     </div>
   );
 }
