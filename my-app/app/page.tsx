@@ -1034,7 +1034,7 @@ export default function Home() {
                               </p>
                             </div>
                             <div className="bg-green-500 text-white text-sm px-3 py-1 rounded-full">
-                              {player.statValue.toLocaleString()} {player.stat}
+                              {player.statValue.toFixed(1)} {player.stat}
                             </div>
                           </div>
                         </li>
@@ -1084,7 +1084,7 @@ export default function Home() {
                               </p>
                             </div>
                             <div className="bg-red-500 text-white text-sm px-3 py-1 rounded-full">
-                              {player.statValue.toLocaleString()} {player.stat}
+                              {player.statValue.toFixed(1)} {player.stat}
                             </div>
                           </div>
                         </li>

@@ -40,6 +40,14 @@ body {
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
   }
+
+  html {
+    transform: scale(0.75); /* Scale down to 75% */
+    transform-origin: top left; /* Set the origin for scaling */
+    width: 133.33%; /* Compensate for reduced scale */
+    overflow-x: hidden; /* Prevent horizontal scrolling */
+  }
+
   .dark {
     --background: 0 0% 3.9%;
     --foreground: 0 0% 98%;
