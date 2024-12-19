@@ -45,8 +45,10 @@ body {
     transform: scale(0.75); /* Scale down to 75% */
     transform-origin: top left; /* Set the origin for scaling */
     width: 133.33%; /* Compensate for reduced scale */
+    height: 100vh; /* Fix the height issue */
     overflow-x: hidden; /* Prevent horizontal scrolling */
   }
+
 
   .dark {
     --background: 0 0% 3.9%;
