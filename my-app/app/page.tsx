@@ -27,6 +27,8 @@ export default function Home() {
   const [weeklyLeaders, setWeeklyLeaders] = useState({});
   const [hotPlayers, setHotPlayers] = useState([]);
   const [coldPlayers, setColdPlayers] = useState([]);
+  const currentWeek = 16; // Current NFL Week (matchups)
+  const previousWeek = currentWeek - 1; // Previous Week (stats)
   const [matchupRankings, setMatchupRankings] = useState({
     QB: { defenses: [] },
     RB: { defenses: [] },
@@ -57,8 +59,6 @@ export default function Home() {
 
   const fetchPlayersToWatch = async () => {
     try {
-      const WEEK = 16;
-  
       const abbreviationMap = {
         JAX: "JAC",
       };
@@ -74,7 +74,7 @@ export default function Home() {
       ] = await Promise.all([
         supabase.from("recent_player_stats").select("player_name, position_id, team_id, passing_yards, rushing_yards, receiving_yards, week"),
         supabase.from("player_averages").select("player_name, avg_passing_yards, avg_rushing_yards, avg_receiving_yards"),
-        supabase.from("team_schedule").select("team_id, opponent_id, week").eq("week", WEEK),
+        supabase.from("team_schedule").select("team_id, opponent_id, week").eq("week", currentWeek),
         supabase.from("defense_averages_qb").select("team_id, avg_passing_yards"),
         supabase.from("defense_averages").select("team_id, avg_rushing_yards, avg_receiving_yards"),
         supabase.from("all_defense_averages_qb").select("avg_passing_yards"),
@@ -540,15 +540,13 @@ export default function Home() {
   }, []);
 
   const fetchWeeklyLeaders = async () => {
-    const WEEK = 16; // Current Week
-
     try {
       const { data: stats, error } = await supabase
         .from("player_stats")
         .select(
           "player_name, position_id, passing_yards, rushing_yards, receiving_yards, matchup, week"
         )
-        .eq("week", WEEK); // Fetch for Week 15 only
+        .eq("week", previousWeek); // Fetch for Week 15 only
 
       if (error) throw error;
 
