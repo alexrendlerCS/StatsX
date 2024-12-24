@@ -27,7 +27,7 @@ export default function Home() {
   const [weeklyLeaders, setWeeklyLeaders] = useState({});
   const [hotPlayers, setHotPlayers] = useState([]);
   const [coldPlayers, setColdPlayers] = useState([]);
-  const currentWeek = 16; // Current NFL Week (matchups)
+  const currentWeek = 17; // Current NFL Week (matchups)
   const previousWeek = currentWeek - 1; // Previous Week (stats)
   const [matchupRankings, setMatchupRankings] = useState({
     QB: { defenses: [] },
