@@ -540,7 +540,7 @@ export default function Home() {
   }, []);
 
   const fetchWeeklyLeaders = async () => {
-    const WEEK = 17; // Current Week
+    const WEEK = 16; // Current Week
 
     try {
       const { data: stats, error } = await supabase
