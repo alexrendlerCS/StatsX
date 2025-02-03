@@ -432,9 +432,7 @@ export default function DefenseAnalysis() {
     try {
       setRankings([]); // ✅ Clear old rankings before fetching new ones
 
-      // Determine correct table based on position
-      const tableName =
-        selectedPosition === "QB" ? "defense_averages_qb" : "defense_averages";
+
       const leagueTable =
         selectedPosition === "QB"
           ? "all_defense_averages_qb"
