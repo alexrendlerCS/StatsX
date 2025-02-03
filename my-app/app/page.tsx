@@ -27,7 +27,7 @@ export default function Home() {
   const [weeklyLeaders, setWeeklyLeaders] = useState({});
   const [hotPlayers, setHotPlayers] = useState([]);
   const [coldPlayers, setColdPlayers] = useState([]);
-  const currentWeek = 17; // Current NFL Week (matchups)
+  const currentWeek = 18; // Current NFL Week (matchups)
   const previousWeek = currentWeek - 1; // Previous Week (stats)
   const [matchupRankings, setMatchupRankings] = useState({
     QB: { defenses: [] },
@@ -768,7 +768,7 @@ export default function Home() {
           <Card className="bg-gray-800 border-blue-400">
             <CardHeader>
               <CardTitle className="text-blue-400 text-center">
-                Leaders for Week 15
+                Leaders for Week 16
               </CardTitle>
             </CardHeader>
             <CardContent>

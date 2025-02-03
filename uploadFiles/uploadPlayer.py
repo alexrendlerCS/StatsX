@@ -218,7 +218,7 @@ def main():
     cursor.close()
     conn.close()
 
-    for week in range(1, total_weeks + 1):
+    for week in range(15, total_weeks + 1):
         for position, position_code in position_map.items():
             print(f"Scraping Week {week}, Position {position}")
             scraped_data = scrape_stats(week, position_code)
