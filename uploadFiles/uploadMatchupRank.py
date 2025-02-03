@@ -1,6 +1,6 @@
 import psycopg2
 from psycopg2.extras import execute_values
-from decimal import Decimal
+from datetime import datetime, timezone
 
 # Supabase connection details
 SUPABASE_HOST = "aws-0-us-west-1.pooler.supabase.com"
@@ -9,10 +9,7 @@ SUPABASE_DB = "postgres"
 SUPABASE_USER = "postgres.xrstrludepuahpovxpzb"
 SUPABASE_PASSWORD = "AZ1d3Tab7my1TubG"
 
-CURRENT_WEEK = 17  # Update this for the current NFL week
-MATCHUP_TYPES = {"Great Matchup": 2, "Good Matchup": 1, "Bad Matchup": 0}
-
-
+# Connect to Supabase database
 def connect_db():
     try:
         return psycopg2.connect(
@@ -27,105 +24,90 @@ def connect_db():
         print(f"Error connecting to database: {e}")
         raise
 
-
-def fetch_defensive_averages(conn):
-    league_averages = {}
-    team_defense_stats = {}
-
-    with conn.cursor() as cursor:
-        # Fetch league-wide averages
-        cursor.execute("SELECT avg_rushing_yards, avg_receiving_yards FROM all_defense_averages")
-        league_avg = cursor.fetchone()
-        cursor.execute("SELECT avg_passing_yards FROM all_defense_averages_qb")
-        qb_league_avg = cursor.fetchone()
-
-        league_averages = {
-            "passing": float(qb_league_avg[0]),
-            "rushing": float(league_avg[0]),
-            "receiving": float(league_avg[1]),
-        }
-
-        # Fetch team defensive stats
-        cursor.execute("SELECT team_id, avg_passing_yards FROM defense_averages_qb")
-        qb_defenses = cursor.fetchall()
-        cursor.execute("SELECT team_id, avg_rushing_yards, avg_receiving_yards FROM defense_averages")
-        other_defenses = cursor.fetchall()
-
-        for team_id, avg_passing_yards in qb_defenses:
-            team_defense_stats[team_id] = {"passing": float(avg_passing_yards)}
-
-        for team_id, avg_rushing_yards, avg_receiving_yards in other_defenses:
-            if team_id not in team_defense_stats:
-                team_defense_stats[team_id] = {}
-            team_defense_stats[team_id].update({
-                "rushing": float(avg_rushing_yards),
-                "receiving": float(avg_receiving_yards),
-            })
-
-    return league_averages, team_defense_stats
-
-
-def update_matchup_rank():
+# Fetch defensive averages and league-wide averages from the database
+def get_defensive_data():
     conn = connect_db()
+    cursor = conn.cursor()
 
-    try:
-        league_avg, team_defenses = fetch_defensive_averages(conn)
+    # Fetch team defensive averages with corrected TE/WR separation
+    cursor.execute("""
+        SELECT team_id, 'QB' AS position, avg_passing_yards AS avg_stat FROM defense_averages_qb
+        UNION ALL
+        SELECT team_id, 'RB', avg_rushing_yards FROM defense_averages
+        WHERE position_id = 'RB'
+        UNION ALL
+        SELECT team_id, 'WR', avg_receiving_yards FROM defense_averages WHERE position_id = 'WR'
+        UNION ALL
+        SELECT team_id, 'TE', avg_receiving_yards FROM defense_averages WHERE position_id = 'TE'
+    """)
+    team_defense = cursor.fetchall()
 
-        with conn.cursor() as cursor:
-            # Fetch player stats and opponents for the current week
-            cursor.execute("""
-                SELECT ps.player_id, ps.player_name, ps.position_id, ts.opponent_id
-                FROM player_stats ps
-                JOIN team_schedule ts ON ps.team_id = ts.team_id
-                WHERE ps.week = %s AND ts.week = %s
-            """, (CURRENT_WEEK, CURRENT_WEEK))
-            player_stats = cursor.fetchall()
+    # Fetch league-wide averages with corrected TE/WR separation
+    cursor.execute("""
+        SELECT 'QB' AS position, avg_passing_yards AS avg_stat FROM all_defense_averages_qb
+        UNION ALL
+        SELECT 'RB', avg_rushing_yards FROM all_defense_averages WHERE position_id = 'RB'
+        UNION ALL
+        SELECT 'WR', avg_receiving_yards FROM all_defense_averages WHERE position_id = 'WR'
+        UNION ALL
+        SELECT 'TE', avg_receiving_yards FROM all_defense_averages WHERE position_id = 'TE'
+    """)
+    league_avg = {row[0]: row[1] for row in cursor.fetchall()}
 
-            for player_id, player_name, position, opponent_id in player_stats:
-                normalized_opponent_id = opponent_id.lstrip('@')
+    cursor.close()
+    conn.close()
+    return team_defense, league_avg
 
-                if normalized_opponent_id not in team_defenses:
-                    continue
+# Calculate defensive matchup rankings
+def calculate_rankings(team_defense, league_avg):
+    rankings = {}
+    
+    # Group data by position
+    for team_id, position, avg_stat in team_defense:
+        league_avg_stat = league_avg.get(position, 0)
+        yards_above_avg = avg_stat - league_avg_stat
 
-                defense_stats = team_defenses[normalized_opponent_id]
-                matchup_score = 0
-                matchup_type = "Bad Matchup"
+        if (position, team_id) not in rankings:
+            rankings[(position, team_id)] = (position, team_id, avg_stat, yards_above_avg)
 
-                # Calculate matchup type based on position
-                if position == "QB":
-                    stat_value = float(defense_stats.get("passing", 0)) - league_avg["passing"]
-                    matchup_score = stat_value
-                elif position == "RB":
-                    stat_value = float(defense_stats.get("rushing", 0)) - league_avg["rushing"]
-                    matchup_score = stat_value
-                elif position in ["WR", "TE"]:
-                    stat_value = float(defense_stats.get("receiving", 0)) - league_avg["receiving"]
-                    matchup_score = stat_value
+    # Convert rankings dictionary to sorted list
+    sorted_rankings = []
+    position_groups = {}
 
-                # Determine matchup type
-                if matchup_score > 20:
-                    matchup_type = "Great Matchup"
-                elif matchup_score > 0:
-                    matchup_type = "Good Matchup"
+    for (position, team_id), data in rankings.items():
+        if position not in position_groups:
+            position_groups[position] = []
+        position_groups[position].append(data)
 
-                # Update the player's matchup rank in the database
-                matchup_rank = MATCHUP_TYPES[matchup_type]
+    for position, teams in position_groups.items():
+        ranked_teams = sorted(teams, key=lambda x: x[3], reverse=True)  # Sort by yards_above_avg
+        for rank, (pos, team_id, avg_stat, yards_above_avg) in enumerate(ranked_teams, start=1):
+            sorted_rankings.append((pos, team_id, avg_stat, yards_above_avg, rank, datetime.now(timezone.utc)))
 
-                cursor.execute("""
-                    UPDATE player_stats
-                    SET matchup_rank = %s
-                    WHERE player_id = %s
-                """, (matchup_rank, player_id))
-                print(f"Updated {player_name}: {matchup_type} ({matchup_rank})")
+    return sorted_rankings
 
-        conn.commit()
+# Insert defensive rankings into the database
+def insert_rankings(rankings):
+    conn = connect_db()
+    cursor = conn.cursor()
 
-    except Exception as e:
-        print(f"Error: {e}")
-        conn.rollback()
-    finally:
-        conn.close()
+    query = """
+    INSERT INTO defensive_matchup_rankings (position, team_id, avg_stat, yards_above_avg, rank, updated_at)
+    VALUES %s
+    ON CONFLICT (position, team_id) DO UPDATE SET
+        avg_stat = EXCLUDED.avg_stat,
+        yards_above_avg = EXCLUDED.yards_above_avg,
+        rank = EXCLUDED.rank,
+        updated_at = EXCLUDED.updated_at;
+    """
+    execute_values(cursor, query, rankings)
+    conn.commit()
+    cursor.close()
+    conn.close()
 
-
+# Main execution
 if __name__ == "__main__":
-    update_matchup_rank()
+    team_defense, league_avg = get_defensive_data()
+    rankings = calculate_rankings(team_defense, league_avg)
+    insert_rankings(rankings)
+    print("Defensive matchup rankings calculated and uploaded successfully.")

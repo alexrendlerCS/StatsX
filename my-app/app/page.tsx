@@ -62,7 +62,7 @@ export default function Home() {
       const abbreviationMap = {
         JAX: "JAC",
       };
-  
+
       const [
         recentStats,
         playerAverages,
@@ -72,21 +72,39 @@ export default function Home() {
         qbLeagueAvg,
         leagueWideAverages,
       ] = await Promise.all([
-        supabase.from("recent_player_stats").select("player_name, position_id, team_id, passing_yards, rushing_yards, receiving_yards, week"),
-        supabase.from("player_averages").select("player_name, avg_passing_yards, avg_rushing_yards, avg_receiving_yards"),
-        supabase.from("team_schedule").select("team_id, opponent_id, week").eq("week", currentWeek),
-        supabase.from("defense_averages_qb").select("team_id, avg_passing_yards"),
-        supabase.from("defense_averages").select("team_id, avg_rushing_yards, avg_receiving_yards"),
+        supabase
+          .from("recent_player_stats")
+          .select(
+            "player_name, position_id, team_id, passing_yards, rushing_yards, receiving_yards, week"
+          ),
+        supabase
+          .from("player_averages")
+          .select(
+            "player_name, avg_passing_yards, avg_rushing_yards, avg_receiving_yards"
+          ),
+        supabase
+          .from("team_schedule")
+          .select("team_id, opponent_id, week")
+          .eq("week", currentWeek),
+        supabase
+          .from("defense_averages_qb")
+          .select("team_id, avg_passing_yards"),
+        supabase
+          .from("defense_averages")
+          .select("team_id, avg_rushing_yards, avg_receiving_yards"),
         supabase.from("all_defense_averages_qb").select("avg_passing_yards"),
-        supabase.from("all_defense_averages").select("avg_rushing_yards, avg_receiving_yards"),
+        supabase
+          .from("all_defense_averages")
+          .select("avg_rushing_yards, avg_receiving_yards"),
       ]);
-  
+
       const leagueAvg = {
         avg_passing_yards: qbLeagueAvg.data[0]?.avg_passing_yards || 0,
         avg_rushing_yards: leagueWideAverages.data[0]?.avg_rushing_yards || 0,
-        avg_receiving_yards: leagueWideAverages.data[0]?.avg_receiving_yards || 0,
+        avg_receiving_yards:
+          leagueWideAverages.data[0]?.avg_receiving_yards || 0,
       };
-  
+
       const defenseMap = {};
       qbDefenseAverages.data.forEach((team) => {
         defenseMap[team.team_id] = {
@@ -100,7 +118,7 @@ export default function Home() {
         defenseMap[team.team_id].rushing = team.avg_rushing_yards || 0;
         defenseMap[team.team_id].receiving = team.avg_receiving_yards || 0;
       });
-  
+
       const recentStatsGrouped = recentStats.data.reduce((acc, stat) => {
         if (!acc[stat.player_name]) {
           acc[stat.player_name] = {
@@ -119,47 +137,57 @@ export default function Home() {
         acc[stat.player_name].receiving_yards.push(stat.receiving_yards || 0);
         return acc;
       }, {});
-  
-      const playersWithAverages = Object.values(recentStatsGrouped as Record<string, PlayerStats>).map((player) => ({
+
+      const playersWithAverages = Object.values(
+        recentStatsGrouped as Record<string, PlayerStats>
+      ).map((player) => ({
         player_name: player.player_name,
         position_id: player.position_id,
         team_id: player.team_id,
         avg_passing_yards:
-          player.passing_yards.reduce((sum: number, val: number) => sum + val, 0) /
-          player.passing_yards.length,
+          player.passing_yards.reduce(
+            (sum: number, val: number) => sum + val,
+            0
+          ) / player.passing_yards.length,
         avg_rushing_yards:
-          player.rushing_yards.reduce((sum: number, val: number) => sum + val, 0) /
-          player.rushing_yards.length,
+          player.rushing_yards.reduce(
+            (sum: number, val: number) => sum + val,
+            0
+          ) / player.rushing_yards.length,
         avg_receiving_yards:
-          player.receiving_yards.reduce((sum: number, val: number) => sum + val, 0) /
-          player.receiving_yards.length,
-      }));      
-      
-  
+          player.receiving_yards.reduce(
+            (sum: number, val: number) => sum + val,
+            0
+          ) / player.receiving_yards.length,
+      }));
+
       const hotPlayers = playersWithAverages.map((player) => {
-        const matchup = teamSchedules.data.find((schedule) => schedule.team_id === player.team_id);
+        const matchup = teamSchedules.data.find(
+          (schedule) => schedule.team_id === player.team_id
+        );
         if (!matchup) return null;
-  
+
         let opponentId = matchup.opponent_id.replace("@", "");
         opponentId = abbreviationMap[opponentId] || opponentId;
-  
+
         const opponentDefense = defenseMap[opponentId];
-  
+
         let statToDisplay = "";
         let last3Avg = 0;
         let seasonAvg = 0;
         let matchupType = "Bad Matchup";
-  
+
         if (player.avg_passing_yards > 0) {
           statToDisplay = "Passing Yards";
           last3Avg = player.avg_passing_yards;
           seasonAvg =
-            playerAverages.data.find((p) => p.player_name === player.player_name)
-              ?.avg_passing_yards || 0;
-  
+            playerAverages.data.find(
+              (p) => p.player_name === player.player_name
+            )?.avg_passing_yards || 0;
+
           const defenseStat = opponentDefense?.passing || 0;
           const matchupScore = defenseStat - leagueAvg.avg_passing_yards;
-  
+
           if (matchupScore > 20) {
             matchupType = "Great Matchup";
           } else if (matchupScore > 0) {
@@ -169,12 +197,13 @@ export default function Home() {
           statToDisplay = "Rushing Yards";
           last3Avg = player.avg_rushing_yards;
           seasonAvg =
-            playerAverages.data.find((p) => p.player_name === player.player_name)
-              ?.avg_rushing_yards || 0;
-  
+            playerAverages.data.find(
+              (p) => p.player_name === player.player_name
+            )?.avg_rushing_yards || 0;
+
           const defenseStat = opponentDefense?.rushing || 0;
           const matchupScore = defenseStat - leagueAvg.avg_rushing_yards;
-  
+
           if (matchupScore > 20) {
             matchupType = "Great Matchup";
           } else if (matchupScore > 0) {
@@ -184,19 +213,20 @@ export default function Home() {
           statToDisplay = "Receiving Yards";
           last3Avg = player.avg_receiving_yards;
           seasonAvg =
-            playerAverages.data.find((p) => p.player_name === player.player_name)
-              ?.avg_receiving_yards || 0;
-  
+            playerAverages.data.find(
+              (p) => p.player_name === player.player_name
+            )?.avg_receiving_yards || 0;
+
           const defenseStat = opponentDefense?.receiving || 0;
           const matchupScore = defenseStat - leagueAvg.avg_receiving_yards;
-  
+
           if (matchupScore > 20) {
             matchupType = "Great Matchup";
           } else if (matchupScore > 0) {
             matchupType = "Good Matchup";
           }
         }
-  
+
         return {
           player_name: player.player_name,
           position: player.position_id,
@@ -207,137 +237,95 @@ export default function Home() {
           opponent: opponentId,
         };
       });
-  
-      const playersByPosition = ["QB", "RB", "WR", "TE"].reduce((acc, position) => {
-        acc[position] = hotPlayers
-          .filter(
-            (player) =>
-              player &&
-              player.position === position &&
-              player.last_3_avg > player.season_avg &&
-              (player.matchupType === "Good Matchup" || player.matchupType === "Great Matchup")
-          )
-          .sort((a, b) => b.last_3_avg - a.last_3_avg)
-          .slice(0, 2); // Top 2 players per position
-        return acc;
-      }, {});
-  
+
+      const playersByPosition = ["QB", "RB", "WR", "TE"].reduce(
+        (acc, position) => {
+          acc[position] = hotPlayers
+            .filter(
+              (player) =>
+                player &&
+                player.position === position &&
+                player.last_3_avg > player.season_avg &&
+                (player.matchupType === "Good Matchup" ||
+                  player.matchupType === "Great Matchup")
+            )
+            .sort((a, b) => b.last_3_avg - a.last_3_avg)
+            .slice(0, 2); // Top 2 players per position
+          return acc;
+        },
+        {}
+      );
+
       const rankedPlayers = Object.values(playersByPosition).flat();
-  
+
       setPlayersToWatch(rankedPlayers);
     } catch (error) {
       console.error("Error fetching players to watch:", error.message);
     }
   };
-  
+
   useEffect(() => {
     fetchTeamNames();
     fetchPlayersToWatch();
   }, []);
 
+  // Fetch Matchup Rankings from Supabase
   const fetchMatchupRankings = async () => {
     try {
-      const rankings = {
-        QB: { defenses: [], leagueAvg: 0 },
-        RB: { defenses: [], leagueAvg: 0 },
-        WR: { defenses: [], leagueAvg: 0 },
-        TE: { defenses: [], leagueAvg: 0 },
+      const { data, error } = await supabase
+        .from("defensive_matchup_rankings")
+        .select("position, team_id, avg_stat, yards_above_avg, rank")
+        .order("rank", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching matchup rankings:", error.message);
+        return;
+      }
+
+      // Fetch league-wide averages
+      const { data: leagueAvgData, error: leagueAvgError } = await supabase
+        .from("all_defense_averages")
+        .select("position_id, avg_rushing_yards, avg_receiving_yards");
+
+      if (leagueAvgError) {
+        console.error(
+          "Error fetching league-wide averages:",
+          leagueAvgError.message
+        );
+        return;
+      }
+
+      // Convert league-wide averages into a lookup
+      const leagueAvgMap = leagueAvgData.reduce(
+        (acc, stat) => {
+          if (stat.position_id === "RB") acc["RB"] = stat.avg_rushing_yards;
+          if (stat.position_id === "WR" || stat.position_id === "TE")
+            acc[stat.position_id] = stat.avg_receiving_yards;
+          return acc;
+        },
+        { QB: 0, RB: 0, WR: 0, TE: 0 }
+      );
+
+      // Group rankings by position
+      const formattedRankings = {
+        QB: { defenses: [] },
+        RB: { defenses: [] },
+        WR: { defenses: [] },
+        TE: { defenses: [] },
       };
 
-      // Fetch League-Wide Average for QB
-      const { data: leagueAvgQB, error: leagueAvgQBError } = await supabase
-        .from("all_defense_averages_qb")
-        .select("avg_passing_yards");
-      if (leagueAvgQBError) throw leagueAvgQBError;
-      rankings.QB.leagueAvg = leagueAvgQB[0]?.avg_passing_yards || 0;
+      data.forEach((defense) => {
+        if (formattedRankings[defense.position]) {
+          formattedRankings[defense.position].defenses.push(defense);
+        }
+      });
 
-      // Fetch Top 3 Teams for QB Passing Yards
-      const { data: qbData, error: qbError } = await supabase
-        .from("defense_averages_qb")
-        .select("team_id, avg_passing_yards")
-        .order("avg_passing_yards", { ascending: false })
-        .limit(3);
-      if (qbError) throw qbError;
-      rankings.QB.defenses = qbData.map((item) => ({
-        team_id: item.team_id,
-        avg_stat: parseFloat(item.avg_passing_yards).toFixed(1),
-        yards_above_avg: (
-          parseFloat(item.avg_passing_yards) - rankings.QB.leagueAvg
-        ).toFixed(1),
-      }));
+      // Attach league-wide averages
+      Object.keys(leagueAvgMap).forEach((position) => {
+        formattedRankings[position].leagueAvg = leagueAvgMap[position] || 0;
+      });
 
-      // Fetch League-Wide Average for RB
-      const { data: leagueAvgRB, error: leagueAvgRBError } = await supabase
-        .from("all_defense_averages")
-        .select("avg_rushing_yards");
-      if (leagueAvgRBError) throw leagueAvgRBError;
-      rankings.RB.leagueAvg = leagueAvgRB[0]?.avg_rushing_yards || 0;
-
-      // Fetch Top 3 Teams for RB Rushing Yards
-      const { data: rbData, error: rbError } = await supabase
-        .from("defense_averages")
-        .select("team_id, avg_rushing_yards")
-        .order("avg_rushing_yards", { ascending: false })
-        .limit(3);
-      if (rbError) throw rbError;
-      rankings.RB.defenses = rbData.map((item) => ({
-        team_id: item.team_id,
-        avg_stat: parseFloat(item.avg_rushing_yards).toFixed(1),
-        yards_above_avg: (
-          parseFloat(item.avg_rushing_yards) - rankings.RB.leagueAvg
-        ).toFixed(1),
-      }));
-
-      // Fetch League-Wide Average for WR
-      const { data: leagueAvgWR, error: leagueAvgWRError } = await supabase
-        .from("all_defense_averages")
-        .select("avg_receiving_yards")
-        .eq("position_id", "WR");
-      if (leagueAvgWRError) throw leagueAvgWRError;
-      rankings.WR.leagueAvg = leagueAvgWR[0]?.avg_receiving_yards || 0;
-
-      // Fetch Top 3 Teams for WR Receiving Yards
-      const { data: wrData, error: wrError } = await supabase
-        .from("defense_averages")
-        .select("team_id, avg_receiving_yards")
-        .eq("position_id", "WR")
-        .order("avg_receiving_yards", { ascending: false })
-        .limit(3);
-      if (wrError) throw wrError;
-      rankings.WR.defenses = wrData.map((item) => ({
-        team_id: item.team_id,
-        avg_stat: parseFloat(item.avg_receiving_yards).toFixed(1),
-        yards_above_avg: (
-          parseFloat(item.avg_receiving_yards) - rankings.WR.leagueAvg
-        ).toFixed(1),
-      }));
-
-      // Fetch League-Wide Average for TE
-      const { data: leagueAvgTE, error: leagueAvgTEError } = await supabase
-        .from("all_defense_averages")
-        .select("avg_receiving_yards")
-        .eq("position_id", "TE");
-      if (leagueAvgTEError) throw leagueAvgTEError;
-      rankings.TE.leagueAvg = leagueAvgTE[0]?.avg_receiving_yards || 0;
-
-      // Fetch Top 3 Teams for TE Receiving Yards
-      const { data: teData, error: teError } = await supabase
-        .from("defense_averages")
-        .select("team_id, avg_receiving_yards")
-        .eq("position_id", "TE")
-        .order("avg_receiving_yards", { ascending: false })
-        .limit(3);
-      if (teError) throw teError;
-      rankings.TE.defenses = teData.map((item) => ({
-        team_id: item.team_id,
-        avg_stat: parseFloat(item.avg_receiving_yards).toFixed(1),
-        yards_above_avg: (
-          parseFloat(item.avg_receiving_yards) - rankings.TE.leagueAvg
-        ).toFixed(1),
-      }));
-
-      // Update state
-      setMatchupRankings(rankings);
+      setMatchupRankings(formattedRankings);
     } catch (error) {
       console.error("Error fetching matchup rankings:", error.message);
     }
@@ -347,10 +335,6 @@ export default function Home() {
     fetchTeamNames();
     fetchMatchupRankings();
   }, []);
-
-  useEffect(() => {
-    console.log("Updated Matchup Rankings State:", matchupRankings);
-  }, [matchupRankings]);
 
   const relevantStats = [
     "Rushing Attempts",
@@ -379,7 +363,7 @@ export default function Home() {
     receiving_yards: number[];
     week_count: number; // Add this field
   };
-  
+
   const fetchHotAndColdPlayers = async () => {
     try {
       // Fetch stats for the last 3 weeks
@@ -398,28 +382,26 @@ export default function Home() {
 
       if (recentError) throw recentError;
       if (avgError) throw avgError;
-      
-      
-      const recentStatsGrouped: Record<string, PlayerStats> = recentStats.reduce((acc, stat) => {
-        if (!acc[stat.player_name]) {
-          acc[stat.player_name] = {
-            player_name: stat.player_name,
-            position_id: stat.position_id,
-            team_id: stat.team_id || "Unknown", // Add team_id with a default value
-            passing_yards: [],
-            rushing_yards: [],
-            receiving_yards: [],
-            week_count: 0, // Track the number of games
-          };
-        }
-        acc[stat.player_name].passing_yards.push(stat.passing_yards || 0);
-        acc[stat.player_name].rushing_yards.push(stat.rushing_yards || 0);
-        acc[stat.player_name].receiving_yards.push(stat.receiving_yards || 0);
-        acc[stat.player_name].week_count += 1; // Increment game count
-        return acc;
-      }, {} as Record<string, PlayerStats>);
-      
-      
+
+      const recentStatsGrouped: Record<string, PlayerStats> =
+        recentStats.reduce((acc, stat) => {
+          if (!acc[stat.player_name]) {
+            acc[stat.player_name] = {
+              player_name: stat.player_name,
+              position_id: stat.position_id,
+              team_id: stat.team_id || "Unknown", // Add team_id with a default value
+              passing_yards: [],
+              rushing_yards: [],
+              receiving_yards: [],
+              week_count: 0, // Track the number of games
+            };
+          }
+          acc[stat.player_name].passing_yards.push(stat.passing_yards || 0);
+          acc[stat.player_name].rushing_yards.push(stat.rushing_yards || 0);
+          acc[stat.player_name].receiving_yards.push(stat.receiving_yards || 0);
+          acc[stat.player_name].week_count += 1; // Increment game count
+          return acc;
+        }, {} as Record<string, PlayerStats>);
 
       // Filter out players with fewer than 3 games
       const validPlayers = Object.values(recentStatsGrouped).filter(
@@ -889,103 +871,93 @@ export default function Home() {
             </CardHeader>
 
             <CardContent>
-              <div className="space-y-8">
-                {["QB", "RB", "WR", "TE"].map((position) => {
-                  const topDefenses =
-                    matchupRankings?.[position]?.defenses || [];
-                  const leagueAvg = matchupRankings?.[position]?.leagueAvg || 0;
+  <div className="space-y-8">
+    {["QB", "RB", "WR", "TE"].map((position) => {
+      const topDefenses = matchupRankings?.[position]?.defenses.slice(0, 3) || [];
+      const leagueAvg = matchupRankings?.[position]?.leagueAvg || 0;
 
-                  return (
-                    <div key={position} className="space-y-6">
-                      {/* Position Title */}
-                      <h3 className="text-xl font-bold text-gray-200 text-center">
-                        {position} Matchups
-                      </h3>
-                      {topDefenses.length > 0 ? (
-                        <div className="grid grid-cols-3 gap-4">
-                          {topDefenses.map((defense, index) => {
-                            const rankStyles = [
-                              {
-                                font: "text-3xl font-extrabold",
-                                outline: "border-4 border-yellow-400",
-                                shadow: "shadow-lg",
-                              },
-                              {
-                                font: "text-2xl font-bold",
-                                outline: "border-4 border-gray-300",
-                                shadow: "shadow-md",
-                              },
-                              {
-                                font: "text-xl font-semibold",
-                                outline: "border-4 border-orange-400",
-                                shadow: "shadow-sm",
-                              },
-                            ][index] || {
-                              font: "text-lg font-medium",
-                              outline: "",
-                              shadow: "",
-                            };
+      return (
+        <div key={position} className="space-y-6">
+          {/* Position Title */}
+          <h3 className="text-xl font-bold text-gray-200 text-center">
+            {position} Matchups
+          </h3>
 
-                            return (
-                              <div
-                                key={index}
-                                className={`rounded-lg p-4 shadow-md hover:scale-105 transition-transform bg-gray-800 ${rankStyles.outline}`}
-                              >
-                                {/* Rank */}
-                                <div
-                                  className={`flex justify-between items-center ${rankStyles.font}`}
-                                >
-                                  <span className={`${rankStyles.shadow}`}>
-                                    {index === 0
-                                      ? "⭐ 1st"
-                                      : index === 1
-                                      ? "🥈 2nd"
-                                      : "🥉 3rd"}
-                                  </span>
-                                </div>
-                                {/* Team */}
-                                <div className="text-center">
-                                  <p
-                                    className={`${rankStyles.font} text-gray-100 mt-2`}
-                                  >
-                                    {teamNames[defense.team_id] ||
-                                      defense.team_id}
-                                  </p>
-                                  {/* Stat Value */}
-                                  <p className="text-gray-300 mt-2">
-                                    <span className="font-bold">
-                                      Avg Allowed:
-                                    </span>{" "}
-                                    <span className="text-green-400">
-                                      {defense.avg_stat}
-                                    </span>
-                                  </p>
-                                  {/* Above League Average */}
-                                  <p className="text-sm text-gray-400 italic">
-                                    (+{defense.yards_above_avg} over league avg)
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-gray-400 text-center">
-                          No data available for {position}
-                        </p>
-                      )}
-                      {/* League-Wide Average */}
-                      <div className="text-gray-400 text-sm text-center mt-4">
-                        League-Wide Average:{" "}
-                        <span className="text-green-400">
-                          {leagueAvg.toFixed(1)}
-                        </span>
-                      </div>
+          {topDefenses.length > 0 ? (
+            <div className="grid grid-cols-3 gap-4">
+              {topDefenses.map((defense, index) => {
+                const rankStyles = [
+                  {
+                    font: "text-3xl font-extrabold",
+                    outline: "border-4 border-yellow-400",
+                    shadow: "shadow-lg",
+                  },
+                  {
+                    font: "text-2xl font-bold",
+                    outline: "border-4 border-gray-300",
+                    shadow: "shadow-md",
+                  },
+                  {
+                    font: "text-xl font-semibold",
+                    outline: "border-4 border-orange-400",
+                    shadow: "shadow-sm",
+                  },
+                ][index] || {
+                  font: "text-lg font-medium",
+                  outline: "",
+                  shadow: "",
+                };
+
+                return (
+                  <div
+                    key={index}
+                    className={`rounded-lg p-4 shadow-md hover:scale-105 transition-transform bg-gray-800 ${rankStyles.outline}`}
+                  >
+                    {/* Rank */}
+                    <div className={`flex justify-between items-center ${rankStyles.font}`}>
+                      <span className={`${rankStyles.shadow}`}>
+                        {index === 0 ? "⭐ 1st" : index === 1 ? "🥈 2nd" : "🥉 3rd"}
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
-            </CardContent>
+
+                    {/* Team */}
+                    <div className="text-center">
+                      <p className={`${rankStyles.font} text-gray-100 mt-2`}>
+                        {teamNames[defense.team_id] || defense.team_id}
+                      </p>
+
+                      {/* Stat Value */}
+                      <p className="text-gray-300 mt-2">
+                        <span className="font-bold">Avg Allowed:</span>{" "}
+                        <span className="text-green-400">
+                          {parseFloat(defense.avg_stat).toFixed(1)}
+                        </span>
+                      </p>
+
+                      {/* Above League Average */}
+                      <p className="text-sm text-gray-400 italic">
+                        (+{parseFloat(defense.yards_above_avg).toFixed(1)} over league avg)
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-gray-400 text-center">No data available for {position}</p>
+          )}
+
+          {/* League-Wide Average */}
+          <div className="text-gray-400 text-sm text-center mt-4">
+            League-Wide Average:{" "}
+            <span className="text-green-400">{leagueAvg.toFixed(1)}</span>
+          </div>
+        </div>
+      );
+    })}
+  </div>
+</CardContent>
+
           </Card>
           <Card className="bg-gray-800 border-blue-400">
             <CardHeader>
@@ -1098,57 +1070,76 @@ export default function Home() {
             </CardContent>
           </Card>
           <Card className="bg-gray-800 border-blue-400">
-      <CardHeader>
-        <CardTitle className="text-blue-400 text-center">Players to Watch</CardTitle>
-      </CardHeader>
-      <CardContent>
-  <ul className="space-y-4">
-    {playersToWatch.map((player, index) => (
-      <li key={index} className="bg-gray-800 p-4 rounded-lg shadow-md flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          {/* Player Avatar Placeholder */}
-          <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center text-xl font-bold text-blue-400">
-            {player.player_name[0]} {/* First letter of player's name */}
-          </div>
-          {/* Player Info */}
-          <div>
-            <p className="text-lg font-semibold text-blue-400">{player.player_name}</p>
-            <p className="text-sm text-gray-400">{player.position}</p>
-            <p className="text-sm text-gray-300">Opponent: {player.opponent}</p>
-          </div>
-        </div>
-        <div className="text-right">
-          {/* Last 3 Avg */}
-          <p className="text-sm text-gray-300">
-            <span className="font-bold text-green-400">Last 3 Avg:</span>{" "}
-            <span className="font-semibold text-white">{player.last_3_avg.toFixed(1)}</span>{" "}
-            {player.statToDisplay}
-          </p>
-          {/* Season Avg */}
-          <p className="text-sm text-gray-300">
-            <span className="font-bold text-yellow-400">Season Avg:</span>{" "}
-            <span className="font-semibold text-white">{player.season_avg.toFixed(1)}</span>{" "}
-            {player.statToDisplay}
-          </p>
-          {/* Matchup Type */}
-          <p
-            className={`inline-block px-2 py-1 text-sm font-bold rounded-full text-white ${
-              player.matchupType === "Great Matchup"
-                ? "bg-green-900"
-                : player.matchupType === "Good Matchup"
-                ? "bg-green-600"
-                : "bg-red-400"
-            }`}
-          >
-            {player.matchupType}
-          </p>
-        </div>
-      </li>
-    ))}
-  </ul>
-</CardContent>
-
-    </Card>
+            <CardHeader>
+              <CardTitle className="text-blue-400 text-center">
+                Players to Watch
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-4">
+                {playersToWatch.map((player, index) => (
+                  <li
+                    key={index}
+                    className="bg-gray-800 p-4 rounded-lg shadow-md flex items-center justify-between"
+                  >
+                    <div className="flex items-center space-x-4">
+                      {/* Player Avatar Placeholder */}
+                      <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center text-xl font-bold text-blue-400">
+                        {player.player_name[0]}{" "}
+                        {/* First letter of player's name */}
+                      </div>
+                      {/* Player Info */}
+                      <div>
+                        <p className="text-lg font-semibold text-blue-400">
+                          {player.player_name}
+                        </p>
+                        <p className="text-sm text-gray-400">
+                          {player.position}
+                        </p>
+                        <p className="text-sm text-gray-300">
+                          Opponent: {player.opponent}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      {/* Last 3 Avg */}
+                      <p className="text-sm text-gray-300">
+                        <span className="font-bold text-green-400">
+                          Last 3 Avg:
+                        </span>{" "}
+                        <span className="font-semibold text-white">
+                          {player.last_3_avg.toFixed(1)}
+                        </span>{" "}
+                        {player.statToDisplay}
+                      </p>
+                      {/* Season Avg */}
+                      <p className="text-sm text-gray-300">
+                        <span className="font-bold text-yellow-400">
+                          Season Avg:
+                        </span>{" "}
+                        <span className="font-semibold text-white">
+                          {player.season_avg.toFixed(1)}
+                        </span>{" "}
+                        {player.statToDisplay}
+                      </p>
+                      {/* Matchup Type */}
+                      <p
+                        className={`inline-block px-2 py-1 text-sm font-bold rounded-full text-white ${
+                          player.matchupType === "Great Matchup"
+                            ? "bg-green-900"
+                            : player.matchupType === "Good Matchup"
+                            ? "bg-green-600"
+                            : "bg-red-400"
+                        }`}
+                      >
+                        {player.matchupType}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
         </div>
       </section>
       {/* Share Picks Section */}

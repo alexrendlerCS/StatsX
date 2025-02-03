@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -12,14 +11,37 @@ import {
 import { Button } from "@/components/ui/button";
 import { BarChart3, Shield } from "lucide-react";
 import supabase from "../supabaseClient";
+import { useState, useEffect } from "react"; // ✅ Keep this single import
 
 export default function DefenseAnalysis() {
   const [selectedTeam, setSelectedTeam] = useState("");
-  const [selectedPosition, setSelectedPosition] = useState("");
+  const [selectedPosition, setSelectedPosition] = useState("RB");
   const [tableHeaders, setTableHeaders] = useState<string[]>([]);
   const [tableRows, setTableRows] = useState([]);
   const [loading, setLoading] = useState(false); // New state for loading spinner
   const [fetchPerformed, setFetchPerformed] = useState(false); // To track if stats have been fetched
+  const [rankings, setRankings] = useState([]);
+  const [leagueAvg, setLeagueAvg] = useState(0);
+  const [teamNames, setTeamNames] = useState({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const teamsPerPage = 10;
+
+  // Paginate Data
+  const indexOfLastTeam = currentPage * teamsPerPage;
+  const indexOfFirstTeam = indexOfLastTeam - teamsPerPage;
+  const currentTeams = rankings.slice(indexOfFirstTeam, indexOfLastTeam);
+
+  const nextPage = () => {
+    if (currentPage < Math.ceil(rankings.length / teamsPerPage)) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const prevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
 
   const teams = [
     { name: "49ers", value: "SF" },
@@ -389,6 +411,99 @@ export default function DefenseAnalysis() {
 
     setTableRows(updatedRows);
   };
+  // Fetch Team Names
+  const fetchTeamNames = async () => {
+    const { data, error } = await supabase
+      .from("teams")
+      .select("team_id, team_name");
+    if (error) {
+      console.error("Error fetching team names:", error.message);
+      return;
+    }
+    const teamMap = data.reduce((acc, team) => {
+      acc[team.team_id] = team.team_name;
+      return acc;
+    }, {});
+    setTeamNames(teamMap);
+  };
+
+  // Fetch Defensive Rankings for Selected Position
+  const fetchRankings = async () => {
+    try {
+      setRankings([]); // ✅ Clear old rankings before fetching new ones
+
+      // Determine correct table based on position
+      const tableName =
+        selectedPosition === "QB" ? "defense_averages_qb" : "defense_averages";
+      const leagueTable =
+        selectedPosition === "QB"
+          ? "all_defense_averages_qb"
+          : "all_defense_averages";
+
+      // Fetch team-specific defensive rankings
+      const { data, error } = await supabase
+        .from("defensive_matchup_rankings")
+        .select("team_id, avg_stat, yards_above_avg, rank")
+        .eq("position", selectedPosition)
+        .order("rank", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching rankings:", error.message);
+        return;
+      }
+
+      // Fetch league-wide average
+      let leagueAvgStat = 0;
+
+      if (selectedPosition === "QB") {
+        // ✅ Fetch QB-specific league-wide passing yards allowed
+        const { data: leagueData, error: leagueError } = await supabase
+          .from(leagueTable)
+          .select("avg_passing_yards")
+          .single();
+
+        if (leagueError) {
+          console.error(
+            "Error fetching league-wide QB average:",
+            leagueError.message
+          );
+          return;
+        }
+
+        leagueAvgStat = leagueData?.avg_passing_yards || 0;
+      } else {
+        // ✅ Fetch league-wide averages for RB, WR, TE
+        const { data: leagueData, error: leagueError } = await supabase
+          .from(leagueTable)
+          .select("avg_rushing_yards, avg_receiving_yards")
+          .eq("position_id", selectedPosition)
+          .single();
+
+        if (leagueError) {
+          console.error(
+            "Error fetching league-wide average:",
+            leagueError.message
+          );
+          return;
+        }
+
+        leagueAvgStat =
+          selectedPosition === "RB"
+            ? leagueData?.avg_rushing_yards
+            : leagueData?.avg_receiving_yards;
+      }
+
+      setLeagueAvg(leagueAvgStat || 0);
+      setRankings(data);
+    } catch (error) {
+      console.error("Error fetching rankings:", error.message);
+    }
+  };
+
+  useEffect(() => {
+    fetchTeamNames();
+    fetchRankings();
+  }, [selectedPosition]);
 
   return (
     <div className="flex-grow">
@@ -399,7 +514,113 @@ export default function DefenseAnalysis() {
             Defense Analysis
           </h1>
         </div>
+        <Card className="bg-gray-800 border-blue-400 shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-blue-400 text-center text-2xl">
+              Defensive Rankings by Position
+            </CardTitle>
+          </CardHeader>
 
+          <CardContent>
+            {/* Position Selector */}
+            <div className="flex justify-center mb-4">
+              <Select onValueChange={setSelectedPosition} defaultValue="RB">
+                <SelectTrigger className="bg-gray-700 text-gray-100 border border-gray-600 w-64 rounded px-4 py-2 shadow-lg">
+                  <SelectValue placeholder="Select Position" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-700 border border-gray-600 rounded shadow-lg">
+                  {positions.map((pos) => (
+                    <SelectItem
+                      key={pos.value}
+                      value={pos.value}
+                      className="px-4 py-2 text-gray-100 cursor-pointer hover:bg-gray-600"
+                    >
+                      {pos.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Rankings Table */}
+            {/* Rankings Table */}
+<div>
+  <table className="w-full text-sm text-gray-300">
+    <thead className="text-xs uppercase bg-gray-700 text-gray-400">
+      <tr>
+        <th className="px-6 py-3">Rank</th>
+        <th className="px-6 py-3">Team</th>
+        <th className="px-6 py-3">Avg Allowed</th>
+        <th className="px-6 py-3">Above/Below Avg</th>
+      </tr>
+    </thead>
+    <tbody>
+      {currentTeams.map((defense, index) => {
+        // Determine color for "Avg Allowed"
+        const avgAllowedColor =
+          defense.avg_stat >= leagueAvg + 20
+            ? "text-green-400" // 🟢 High Yards Allowed (Weak Defense)
+            : defense.avg_stat < leagueAvg - 10
+            ? "text-red-400" // 🔴 Low Yards Allowed (Strong Defense)
+            : "text-yellow-400"; // 🟡 Around League Avg
+
+        // Determine color for "Above/Below Avg"
+        const aboveBelowColor =
+          defense.yards_above_avg >= 10
+            ? "text-green-300" // 🟢 Above League Avg by 10+
+            : defense.yards_above_avg <= -10
+            ? "text-red-400" // 🔴 Below League Avg by 10+
+            : "text-yellow-300"; // 🟡 Within ±10 yards of league avg
+
+        return (
+          <tr key={index} className="bg-gray-800 border-b border-gray-700">
+            {/* Rank */}
+            <td className="px-6 py-4 font-bold">{defense.rank}</td>
+
+            {/* Team */}
+            <td className="px-6 py-4">{teamNames[defense.team_id] || defense.team_id}</td>
+
+            {/* Avg Allowed - Colorized Based on Performance */}
+            <td className={`px-6 py-4 font-bold ${avgAllowedColor}`}>
+              {parseFloat(defense.avg_stat).toFixed(1)}
+            </td>
+
+            {/* Above/Below Avg - Colorized Based on Comparison */}
+            <td className={`px-6 py-4 text-sm italic ${aboveBelowColor}`}>
+              {defense.yards_above_avg >= 0
+                ? `+${parseFloat(defense.yards_above_avg).toFixed(1)}`
+                : parseFloat(defense.yards_above_avg).toFixed(1)}
+            </td>
+          </tr>
+        );
+      })}
+    </tbody>
+  </table>
+
+  {/* Pagination Controls */}
+  <div className="flex justify-center mt-4">
+    <button
+      onClick={prevPage}
+      disabled={currentPage === 1}
+      className="px-3 py-2 bg-gray-600 rounded-l"
+    >
+      ◀ Prev
+    </button>
+    <span className="px-4 py-2 bg-gray-700 text-gray-200">
+      Page {currentPage} of {Math.ceil(rankings.length / teamsPerPage)}
+    </span>
+    <button
+      onClick={nextPage}
+      disabled={currentPage === Math.ceil(rankings.length / teamsPerPage)}
+      className="px-3 py-2 bg-gray-600 rounded-r"
+    >
+      Next ▶
+    </button>
+  </div>
+</div>
+
+          </CardContent>
+        </Card>
         <Card className="bg-gray-800 border-blue-400">
           <CardHeader>
             <CardTitle className="text-blue-400 flex items-center space-x-2">
