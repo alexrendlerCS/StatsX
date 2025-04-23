@@ -1,14 +1,10 @@
-import psycopg2
-from psycopg2.extras import execute_values
+# Supabase connection details from .env
+SUPABASE_HOST = os.getenv("SUPABASE_HOST")
+SUPABASE_PORT = os.getenv("SUPABASE_PORT")
+SUPABASE_DB = os.getenv("SUPABASE_DB")
+SUPABASE_USER = os.getenv("SUPABASE_USER")
+SUPABASE_PASSWORD = os.getenv("SUPABASE_PASSWORD")
 
-# Supabase connection details
-SUPABASE_HOST = "aws-0-us-west-1.pooler.supabase.com"
-SUPABASE_PORT = 6543
-SUPABASE_DB = "postgres"
-SUPABASE_USER = "postgres.xrstrludepuahpovxpzb"
-SUPABASE_PASSWORD = "AZ1d3Tab7my1TubG"
-
-# Connect to Supabase database
 def connect_db():
     try:
         return psycopg2.connect(
@@ -23,7 +19,6 @@ def connect_db():
         print(f"Error connecting to database: {e}")
         raise
 
-# Fetch and calculate all-team averages from defense_averages and defense_averages_qb
 def calculate_all_defense_averages():
     conn = connect_db()
     cursor = conn.cursor()

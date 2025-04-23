@@ -3,13 +3,16 @@ from bs4 import BeautifulSoup
 import psycopg2
 from psycopg2.extras import execute_values
 
-# Supabase connection details
-DB_HOST = "aws-0-us-west-1.pooler.supabase.com"
-DB_PORT = 6543
-DB_NAME = "postgres"
-DB_USER = "postgres.xrstrludepuahpovxpzb"
-DB_PASSWORD = "AZ1d3Tab7my1TubG"
-API_KEY = "255dc66ae2e34b158e2f27d5bda13a26"  # SportsDataIO API Key
+# Load environment variables
+load_dotenv()
+
+# Get sensitive info from environment
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+API_KEY = os.getenv("SPORTSDATA_API_KEY")
 
 position_map = {"WR": "WR", "QB": "QB", "RB": "RB", "TE": "TE"}
 

@@ -3,12 +3,15 @@ from psycopg2.extras import execute_values
 from datetime import datetime, timezone
 from decimal import Decimal
 
-# Supabase connection details
-SUPABASE_HOST = "aws-0-us-west-1.pooler.supabase.com"
-SUPABASE_PORT = 6543
-SUPABASE_DB = "postgres"
-SUPABASE_USER = "postgres.xrstrludepuahpovxpzb"
-SUPABASE_PASSWORD = "AZ1d3Tab7my1TubG"
+# Load environment variables
+load_dotenv()
+
+# Get sensitive info from environment
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 # Connect to Supabase database
 def connect_db():
