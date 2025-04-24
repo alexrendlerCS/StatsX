@@ -12,6 +12,20 @@ body {
   }
 }
 
+/* global styles */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #3b82f6; /* Tailwind blue-500 */
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

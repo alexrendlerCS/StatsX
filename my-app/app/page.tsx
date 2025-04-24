@@ -24,11 +24,15 @@ export default function Home() {
   const [picksError, setPicksError] = useState(""); // For picks error message
   const [overUnder, setOverUnder] = useState(""); // Over/Under selection
   const [suggestions, setSuggestions] = useState([]); // Player name suggestions
-  const [weeklyLeaders, setWeeklyLeaders] = useState({});
-  const [hotPlayers, setHotPlayers] = useState([]);
-  const [coldPlayers, setColdPlayers] = useState([]);
-  const currentWeek = 16; // Current NFL Week (matchups)
+  const currentWeek = 17; // Current NFL Week (matchups)
   const previousWeek = currentWeek - 1; // Previous Week (stats)
+  const [selectedFilter, setSelectedFilter] = useState("All"); // "All" | "Overperforming" | "Underperforming"
+  const [allPlayersToWatch, setAllPlayersToWatch] = useState([]);
+
+  const [performanceFilter, setPerformanceFilter] = useState<
+    "All" | "Overperforming" | "Underperforming"
+  >("All");
+
   const [matchupRankings, setMatchupRankings] = useState({
     QB: { defenses: [] },
     RB: { defenses: [] },
@@ -56,218 +60,144 @@ export default function Home() {
       console.error("Error fetching team names:", error.message);
     }
   };
+  const [weeklyLeaders, setWeeklyLeaders] = useState({
+    QB: [],
+    RB: [],
+    WR: [],
+    TE: [],
+  });
 
-  const fetchPlayersToWatch = async () => {
+  const fetchWeeklyLeaders = async () => {
     try {
-      const abbreviationMap = {
-        JAX: "JAC",
+      const { data, error } = await supabase
+        .from("weekly_leaders")
+        .select("week, player_name, position_id, stat_value, matchup, rank")
+        .eq("week", previousWeek); // Use week 15 data if current is 16
+
+      if (error) throw error;
+
+      const grouped = {
+        QB: [],
+        RB: [],
+        WR: [],
+        TE: [],
       };
 
-      const [
-        recentStats,
-        playerAverages,
-        teamSchedules,
-        qbDefenseAverages,
-        otherDefenseAverages,
-        qbLeagueAvg,
-        leagueWideAverages,
-      ] = await Promise.all([
-        supabase
-          .from("recent_player_stats")
-          .select(
-            "player_name, position_id, team_id, passing_yards, rushing_yards, receiving_yards, week"
-          ),
-        supabase
-          .from("player_averages")
-          .select(
-            "player_name, avg_passing_yards, avg_rushing_yards, avg_receiving_yards"
-          ),
-        supabase
-          .from("team_schedule")
-          .select("team_id, opponent_id, week")
-          .eq("week", currentWeek),
-        supabase
-          .from("defense_averages_qb")
-          .select("team_id, avg_passing_yards"),
-        supabase
-          .from("defense_averages")
-          .select("team_id, avg_rushing_yards, avg_receiving_yards"),
-        supabase.from("all_defense_averages_qb").select("avg_passing_yards"),
-        supabase
-          .from("all_defense_averages")
-          .select("avg_rushing_yards, avg_receiving_yards"),
-      ]);
-
-      const leagueAvg = {
-        avg_passing_yards: qbLeagueAvg.data[0]?.avg_passing_yards || 0,
-        avg_rushing_yards: leagueWideAverages.data[0]?.avg_rushing_yards || 0,
-        avg_receiving_yards:
-          leagueWideAverages.data[0]?.avg_receiving_yards || 0,
-      };
-
-      const defenseMap = {};
-      qbDefenseAverages.data.forEach((team) => {
-        defenseMap[team.team_id] = {
-          passing: team.avg_passing_yards || 0,
-        };
-      });
-      otherDefenseAverages.data.forEach((team) => {
-        if (!defenseMap[team.team_id]) {
-          defenseMap[team.team_id] = {};
+      data.forEach((row) => {
+        if (grouped[row.position_id]) {
+          grouped[row.position_id].push(row);
         }
-        defenseMap[team.team_id].rushing = team.avg_rushing_yards || 0;
-        defenseMap[team.team_id].receiving = team.avg_receiving_yards || 0;
       });
 
-      const recentStatsGrouped = recentStats.data.reduce((acc, stat) => {
-        if (!acc[stat.player_name]) {
-          acc[stat.player_name] = {
-            player_name: stat.player_name,
-            position_id: stat.position_id,
-            team_id: stat.team_id,
-            passing_yards: [],
-            rushing_yards: [],
-            receiving_yards: [],
-          };
-        }
-        acc[stat.player_name].passing_yards.push(stat.passing_yards || 0);
-        if (stat.position_id !== "WR") {
-          acc[stat.player_name].rushing_yards.push(stat.rushing_yards || 0);
-        }
-        acc[stat.player_name].receiving_yards.push(stat.receiving_yards || 0);
-        return acc;
-      }, {});
-
-      const playersWithAverages = Object.values(
-        recentStatsGrouped as Record<string, PlayerStats>
-      ).map((player) => ({
-        player_name: player.player_name,
-        position_id: player.position_id,
-        team_id: player.team_id,
-        avg_passing_yards:
-          player.passing_yards.reduce(
-            (sum: number, val: number) => sum + val,
-            0
-          ) / player.passing_yards.length,
-        avg_rushing_yards:
-          player.rushing_yards.reduce(
-            (sum: number, val: number) => sum + val,
-            0
-          ) / player.rushing_yards.length,
-        avg_receiving_yards:
-          player.receiving_yards.reduce(
-            (sum: number, val: number) => sum + val,
-            0
-          ) / player.receiving_yards.length,
-      }));
-
-      const hotPlayers = playersWithAverages.map((player) => {
-        const matchup = teamSchedules.data.find(
-          (schedule) => schedule.team_id === player.team_id
-        );
-        if (!matchup) return null;
-
-        let opponentId = matchup.opponent_id.replace("@", "");
-        opponentId = abbreviationMap[opponentId] || opponentId;
-
-        const opponentDefense = defenseMap[opponentId];
-
-        let statToDisplay = "";
-        let last3Avg = 0;
-        let seasonAvg = 0;
-        let matchupType = "Bad Matchup";
-
-        if (player.avg_passing_yards > 0) {
-          statToDisplay = "Passing Yards";
-          last3Avg = player.avg_passing_yards;
-          seasonAvg =
-            playerAverages.data.find(
-              (p) => p.player_name === player.player_name
-            )?.avg_passing_yards || 0;
-
-          const defenseStat = opponentDefense?.passing || 0;
-          const matchupScore = defenseStat - leagueAvg.avg_passing_yards;
-
-          if (matchupScore > 20) {
-            matchupType = "Great Matchup";
-          } else if (matchupScore > 0) {
-            matchupType = "Good Matchup";
-          }
-        } else if (player.avg_rushing_yards > 0) {
-          statToDisplay = "Rushing Yards";
-          last3Avg = player.avg_rushing_yards;
-          seasonAvg =
-            playerAverages.data.find(
-              (p) => p.player_name === player.player_name
-            )?.avg_rushing_yards || 0;
-
-          const defenseStat = opponentDefense?.rushing || 0;
-          const matchupScore = defenseStat - leagueAvg.avg_rushing_yards;
-
-          if (matchupScore > 20) {
-            matchupType = "Great Matchup";
-          } else if (matchupScore > 0) {
-            matchupType = "Good Matchup";
-          }
-        } else if (player.avg_receiving_yards > 0) {
-          statToDisplay = "Receiving Yards";
-          last3Avg = player.avg_receiving_yards;
-          seasonAvg =
-            playerAverages.data.find(
-              (p) => p.player_name === player.player_name
-            )?.avg_receiving_yards || 0;
-
-          const defenseStat = opponentDefense?.receiving || 0;
-          const matchupScore = defenseStat - leagueAvg.avg_receiving_yards;
-
-          if (matchupScore > 20) {
-            matchupType = "Great Matchup";
-          } else if (matchupScore > 0) {
-            matchupType = "Good Matchup";
-          }
-        }
-
-        return {
-          player_name: player.player_name,
-          position: player.position_id,
-          statToDisplay,
-          last_3_avg: last3Avg,
-          season_avg: seasonAvg,
-          matchupType,
-          opponent: opponentId,
-        };
+      // Sort by rank just in case and update state
+      Object.keys(grouped).forEach((pos) => {
+        grouped[pos] = grouped[pos].sort((a, b) => a.rank - b.rank);
       });
 
-      const playersByPosition = ["QB", "RB", "WR", "TE"].reduce(
-        (acc, position) => {
-          acc[position] = hotPlayers
-            .filter(
-              (player) =>
-                player &&
-                player.position === position &&
-                player.last_3_avg > player.season_avg &&
-                (player.matchupType === "Good Matchup" ||
-                  player.matchupType === "Great Matchup")
-            )
-            .sort((a, b) => b.last_3_avg - a.last_3_avg)
-            .slice(0, 2); // Top 2 players per position
-          return acc;
-        },
-        {}
-      );
-
-      const rankedPlayers = Object.values(playersByPosition).flat();
-
-      setPlayersToWatch(rankedPlayers);
-    } catch (error) {
-      console.error("Error fetching players to watch:", error.message);
+      setWeeklyLeaders(grouped);
+    } catch (err) {
+      console.error("Error fetching weekly leaders:", err.message);
     }
   };
 
   useEffect(() => {
-    fetchTeamNames();
-    fetchPlayersToWatch();
+    fetchWeeklyLeaders();
   }, []);
+
+  const [hotPlayers, setHotPlayers] = useState([]);
+  const [coldPlayers, setColdPlayers] = useState([]);
+
+  const fetchHotAndColdPlayers = async () => {
+    try {
+      const [{ data: hot, error: hotError }, { data: cold, error: coldError }] =
+        await Promise.all([
+          supabase
+            .from("hot_players")
+            .select(
+              "player_name, position, stat, recent_average, season_average, percentage_change"
+            ),
+          supabase
+            .from("cold_players")
+            .select(
+              "player_name, position, stat, recent_average, season_average, percentage_change"
+            ),
+        ]);
+
+      if (hotError) throw hotError;
+      if (coldError) throw coldError;
+
+      setHotPlayers(
+        hot
+          .sort((a, b) => b.percentage_change - a.percentage_change)
+          .slice(0, 5)
+      );
+      setColdPlayers(
+        cold
+          .sort((a, b) => a.percentage_change - b.percentage_change)
+          .slice(0, 5)
+      );
+    } catch (err) {
+      console.error("Error fetching hot/cold players:", err.message);
+    }
+  };
+
+  useEffect(() => {
+    fetchHotAndColdPlayers();
+  }, []);
+
+ const fetchPlayersToWatch = async () => {
+   try {
+     const { data, error } = await supabase
+       .from("players_to_watch")
+       .select(
+         "player_name, position, stat_to_display, last_3_avg, season_avg, opponent, matchup_type, performance_type"
+       );
+
+     if (error) throw error;
+
+     console.log("Players to Watch Data:", data);
+     setAllPlayersToWatch(data); // Store full list once
+   } catch (error) {
+     console.error("Error fetching players to watch:", error.message);
+   }
+ };
+
+ // Run only once to fetch everything
+ useEffect(() => {
+   fetchTeamNames();
+   fetchPlayersToWatch();
+ }, []);
+
+ // Filter the players based on performanceFilter
+ useEffect(() => {
+   if (!allPlayersToWatch || allPlayersToWatch.length === 0) return;
+
+   const grouped = {
+     QB: [],
+     RB: [],
+     WR: [],
+     TE: [],
+   };
+
+   allPlayersToWatch.forEach((player) => {
+     const posKey = player.position.toUpperCase();
+
+     if (
+       grouped[posKey] &&
+       (performanceFilter === "All" ||
+         player.performance_type === performanceFilter)
+     ) {
+       grouped[posKey].push(player);
+     }
+   });
+
+   Object.keys(grouped).forEach((position) => {
+     grouped[position] = grouped[position]
+       .sort((a, b) => b.last_3_avg - a.last_3_avg)
+   });
+
+   setPlayersToWatch(Object.values(grouped).flat());
+ }, [performanceFilter, allPlayersToWatch]);
 
   // Fetch Matchup Rankings from Supabase
   const fetchMatchupRankings = async () => {
@@ -350,10 +280,6 @@ export default function Home() {
     "Interceptions",
   ];
 
-  useEffect(() => {
-    fetchHotAndColdPlayers();
-  }, []);
-
   type PlayerStats = {
     player_name: string;
     position_id: string;
@@ -362,210 +288,6 @@ export default function Home() {
     rushing_yards: number[];
     receiving_yards: number[];
     week_count: number; // Add this field
-  };
-
-  const fetchHotAndColdPlayers = async () => {
-    try {
-      // Fetch stats for the last 3 weeks
-      const { data: recentStats, error: recentError } = await supabase
-        .from("recent_player_stats")
-        .select(
-          "player_name, position_id, team_id, passing_yards, rushing_yards, receiving_yards, week"
-        );
-
-      // Fetch season averages for comparison
-      const { data: playerAverages, error: avgError } = await supabase
-        .from("player_averages")
-        .select(
-          "player_name, position_id, avg_passing_yards, avg_rushing_yards, avg_receiving_yards"
-        );
-
-      if (recentError) throw recentError;
-      if (avgError) throw avgError;
-
-      const recentStatsGrouped: Record<string, PlayerStats> =
-        recentStats.reduce((acc, stat) => {
-          if (!acc[stat.player_name]) {
-            acc[stat.player_name] = {
-              player_name: stat.player_name,
-              position_id: stat.position_id,
-              team_id: stat.team_id || "Unknown", // Add team_id with a default value
-              passing_yards: [],
-              rushing_yards: [],
-              receiving_yards: [],
-              week_count: 0, // Track the number of games
-            };
-          }
-          acc[stat.player_name].passing_yards.push(stat.passing_yards || 0);
-          acc[stat.player_name].rushing_yards.push(stat.rushing_yards || 0);
-          acc[stat.player_name].receiving_yards.push(stat.receiving_yards || 0);
-          acc[stat.player_name].week_count += 1; // Increment game count
-          return acc;
-        }, {} as Record<string, PlayerStats>);
-
-      // Filter out players with fewer than 3 games
-      const validPlayers = Object.values(recentStatsGrouped).filter(
-        (player) => player.week_count === 3
-      );
-
-      // Calculate averages for the last 3 weeks
-      const recentAverages = validPlayers.map((player) => ({
-        player_name: player.player_name,
-        position_id: player.position_id,
-        avg_passing_yards:
-          player.passing_yards.reduce((sum, val) => sum + val, 0) /
-          player.passing_yards.length,
-        avg_rushing_yards:
-          player.rushing_yards.reduce((sum, val) => sum + val, 0) /
-          player.rushing_yards.length,
-        avg_receiving_yards:
-          player.receiving_yards.reduce((sum, val) => sum + val, 0) /
-          player.receiving_yards.length,
-      }));
-
-      // Compare with season averages
-      const playersWithComparison = recentAverages
-        .map((recent) => {
-          const average = playerAverages.find(
-            (avg) =>
-              avg.player_name === recent.player_name &&
-              avg.position_id === recent.position_id
-          );
-
-          if (!average) return null;
-
-          // Apply minimum season average thresholds
-          const meetsThreshold =
-            (average.avg_passing_yards || 0) >= 100 ||
-            (average.avg_rushing_yards || 0) >= 15 ||
-            (average.avg_receiving_yards || 0) >= 20;
-
-          if (!meetsThreshold) return null;
-
-          const calculatePercentageChange = (recentValue, avgValue) => {
-            if (avgValue === 0) return 0; // Avoid division by zero
-            return ((recentValue - avgValue) / avgValue) * 100;
-          };
-
-          // Calculate percentage changes for each stat
-          const passingChange = calculatePercentageChange(
-            recent.avg_passing_yards || 0,
-            average.avg_passing_yards || 0
-          );
-          const rushingChange = calculatePercentageChange(
-            recent.avg_rushing_yards || 0,
-            average.avg_rushing_yards || 0
-          );
-          const receivingChange = calculatePercentageChange(
-            recent.avg_receiving_yards || 0,
-            average.avg_receiving_yards || 0
-          );
-
-          const statChanges = [
-            { stat: "Passing Yds", change: passingChange },
-            { stat: "Rushing Yds", change: rushingChange },
-            { stat: "Receiving Yds", change: receivingChange },
-          ];
-
-          const relevantStat = statChanges.reduce((prev, curr) =>
-            Math.abs(curr.change) > Math.abs(prev.change) ? curr : prev
-          );
-
-          const statValue =
-            relevantStat.stat === "Passing Yds"
-              ? recent.avg_passing_yards
-              : relevantStat.stat === "Rushing Yds"
-              ? recent.avg_rushing_yards
-              : recent.avg_receiving_yards;
-
-          if (statValue < 15) return null;
-
-          return {
-            player_name: recent.player_name,
-            position: recent.position_id,
-            stat: relevantStat.stat,
-            percentage_change: relevantStat.change,
-            statValue: statValue || 0,
-            season_average:
-              relevantStat.stat === "Passing Yds"
-                ? average.avg_passing_yards
-                : relevantStat.stat === "Rushing Yds"
-                ? average.avg_rushing_yards
-                : average.avg_receiving_yards,
-            recent_average: statValue, // Now correctly calculated as the 3-week average
-          };
-        })
-        .filter(Boolean);
-
-      // Filter Hot and Cold Players
-      const hot = playersWithComparison.filter((p) => p.percentage_change > 0);
-      const cold = playersWithComparison.filter((p) => p.percentage_change < 0);
-
-      // Sort Hot and Cold Players
-      const sortedHot = hot.sort(
-        (a, b) => b.percentage_change - a.percentage_change
-      );
-      const sortedCold = cold.sort(
-        (a, b) => a.percentage_change - b.percentage_change
-      );
-
-      // Update state
-      setHotPlayers(sortedHot.slice(0, 5));
-      setColdPlayers(sortedCold.slice(0, 5));
-    } catch (err) {
-      console.error("Error fetching hot and cold players:", err.message);
-    }
-  };
-
-  useEffect(() => {
-    fetchWeeklyLeaders();
-  }, []);
-
-  const fetchWeeklyLeaders = async () => {
-    try {
-      const { data: stats, error } = await supabase
-        .from("player_stats")
-        .select(
-          "player_name, position_id, passing_yards, rushing_yards, receiving_yards, matchup, week"
-        )
-        .eq("week", previousWeek); // Fetch for Week 15 only
-
-      if (error) throw error;
-
-      const leaders = getTopThreePlayers(stats);
-      setWeeklyLeaders(leaders);
-    } catch (err) {
-      console.error("Error fetching weekly leaders:", err.message);
-    }
-  };
-
-  const getTopThreePlayers = (stats) => {
-    const positions = {
-      QB: { metric: "passing_yards", players: [] },
-      RB: { metric: "rushing_yards", players: [] },
-      WR: { metric: "receiving_yards", players: [] },
-      TE: { metric: "receiving_yards", players: [] },
-    };
-
-    stats.forEach((player) => {
-      const position = positions[player.position_id];
-      if (position) {
-        const statValue = player[position.metric] || 0;
-        position.players.push({
-          ...player,
-          statValue,
-          matchup: player.matchup || "Unknown", // Include matchup value
-        });
-      }
-    });
-
-    // Sort each position's players by stat value and keep top 3
-    Object.keys(positions).forEach((key) => {
-      positions[key].players.sort((a, b) => b.statValue - a.statValue);
-      positions[key].players = positions[key].players.slice(0, 3);
-    });
-
-    return positions;
   };
 
   const normalizeString = (str) =>
@@ -768,13 +490,13 @@ export default function Home() {
           <Card className="bg-gray-800 border-blue-400">
             <CardHeader>
               <CardTitle className="text-blue-400 text-center">
-                Leaders for Week 16
+                Leaders for Week 17
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-8">
                 {["QB", "RB", "WR", "TE"].map((position) => {
-                  const topPlayers = weeklyLeaders[position]?.players || [];
+                  const topPlayers = weeklyLeaders[position] || [];
                   return (
                     <div key={position} className="space-y-6">
                       {/* Position Title */}
@@ -836,12 +558,12 @@ export default function Home() {
                                   </p>
                                   {/* Stat Value */}
                                   <p className="text-gray-300 mt-2">
-                                    {player.statValue.toLocaleString()}{" "}
+                                    {player.stat_value.toLocaleString()}
                                     {position === "QB"
-                                      ? "Passing Yards"
+                                      ? " Passing Yards"
                                       : position === "RB"
-                                      ? "Rushing Yards"
-                                      : "Receiving Yards"}
+                                      ? " Rushing Yards"
+                                      : " Receiving Yards"}
                                   </p>
                                   {/* Matchup */}
                                   <p className="text-sm text-gray-400 italic mt-1">
@@ -871,93 +593,112 @@ export default function Home() {
             </CardHeader>
 
             <CardContent>
-  <div className="space-y-8">
-    {["QB", "RB", "WR", "TE"].map((position) => {
-      const topDefenses = matchupRankings?.[position]?.defenses.slice(0, 3) || [];
-      const leagueAvg = matchupRankings?.[position]?.leagueAvg || 0;
+              <div className="space-y-8">
+                {["QB", "RB", "WR", "TE"].map((position) => {
+                  const topDefenses =
+                    matchupRankings?.[position]?.defenses.slice(0, 3) || [];
+                  const leagueAvg = matchupRankings?.[position]?.leagueAvg || 0;
 
-      return (
-        <div key={position} className="space-y-6">
-          {/* Position Title */}
-          <h3 className="text-xl font-bold text-gray-200 text-center">
-            {position} Matchups
-          </h3>
+                  return (
+                    <div key={position} className="space-y-6">
+                      {/* Position Title */}
+                      <h3 className="text-xl font-bold text-gray-200 text-center">
+                        {position} Matchups
+                      </h3>
 
-          {topDefenses.length > 0 ? (
-            <div className="grid grid-cols-3 gap-4">
-              {topDefenses.map((defense, index) => {
-                const rankStyles = [
-                  {
-                    font: "text-3xl font-extrabold",
-                    outline: "border-4 border-yellow-400",
-                    shadow: "shadow-lg",
-                  },
-                  {
-                    font: "text-2xl font-bold",
-                    outline: "border-4 border-gray-300",
-                    shadow: "shadow-md",
-                  },
-                  {
-                    font: "text-xl font-semibold",
-                    outline: "border-4 border-orange-400",
-                    shadow: "shadow-sm",
-                  },
-                ][index] || {
-                  font: "text-lg font-medium",
-                  outline: "",
-                  shadow: "",
-                };
+                      {topDefenses.length > 0 ? (
+                        <div className="grid grid-cols-3 gap-4">
+                          {topDefenses.map((defense, index) => {
+                            const rankStyles = [
+                              {
+                                font: "text-3xl font-extrabold",
+                                outline: "border-4 border-yellow-400",
+                                shadow: "shadow-lg",
+                              },
+                              {
+                                font: "text-2xl font-bold",
+                                outline: "border-4 border-gray-300",
+                                shadow: "shadow-md",
+                              },
+                              {
+                                font: "text-xl font-semibold",
+                                outline: "border-4 border-orange-400",
+                                shadow: "shadow-sm",
+                              },
+                            ][index] || {
+                              font: "text-lg font-medium",
+                              outline: "",
+                              shadow: "",
+                            };
 
-                return (
-                  <div
-                    key={index}
-                    className={`rounded-lg p-4 shadow-md hover:scale-105 transition-transform bg-gray-800 ${rankStyles.outline}`}
-                  >
-                    {/* Rank */}
-                    <div className={`flex justify-between items-center ${rankStyles.font}`}>
-                      <span className={`${rankStyles.shadow}`}>
-                        {index === 0 ? "⭐ 1st" : index === 1 ? "🥈 2nd" : "🥉 3rd"}
-                      </span>
-                    </div>
+                            return (
+                              <div
+                                key={index}
+                                className={`rounded-lg p-4 shadow-md hover:scale-105 transition-transform bg-gray-800 ${rankStyles.outline}`}
+                              >
+                                {/* Rank */}
+                                <div
+                                  className={`flex justify-between items-center ${rankStyles.font}`}
+                                >
+                                  <span className={`${rankStyles.shadow}`}>
+                                    {index === 0
+                                      ? "⭐ 1st"
+                                      : index === 1
+                                      ? "🥈 2nd"
+                                      : "🥉 3rd"}
+                                  </span>
+                                </div>
 
-                    {/* Team */}
-                    <div className="text-center">
-                      <p className={`${rankStyles.font} text-gray-100 mt-2`}>
-                        {teamNames[defense.team_id] || defense.team_id}
-                      </p>
+                                {/* Team */}
+                                <div className="text-center">
+                                  <p
+                                    className={`${rankStyles.font} text-gray-100 mt-2`}
+                                  >
+                                    {teamNames[defense.team_id] ||
+                                      defense.team_id}
+                                  </p>
 
-                      {/* Stat Value */}
-                      <p className="text-gray-300 mt-2">
-                        <span className="font-bold">Avg Allowed:</span>{" "}
+                                  {/* Stat Value */}
+                                  <p className="text-gray-300 mt-2">
+                                    <span className="font-bold">
+                                      Avg Allowed:
+                                    </span>{" "}
+                                    <span className="text-green-400">
+                                      {parseFloat(defense.avg_stat).toFixed(1)}
+                                    </span>
+                                  </p>
+
+                                  {/* Above League Average */}
+                                  <p className="text-sm text-gray-400 italic">
+                                    (+
+                                    {parseFloat(
+                                      defense.yards_above_avg
+                                    ).toFixed(1)}{" "}
+                                    over league avg)
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-gray-400 text-center">
+                          No data available for {position}
+                        </p>
+                      )}
+
+                      {/* League-Wide Average */}
+                      <div className="text-gray-400 text-sm text-center mt-4">
+                        League-Wide Average:{" "}
                         <span className="text-green-400">
-                          {parseFloat(defense.avg_stat).toFixed(1)}
+                          {leagueAvg.toFixed(1)}
                         </span>
-                      </p>
-
-                      {/* Above League Average */}
-                      <p className="text-sm text-gray-400 italic">
-                        (+{parseFloat(defense.yards_above_avg).toFixed(1)} over league avg)
-                      </p>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-gray-400 text-center">No data available for {position}</p>
-          )}
-
-          {/* League-Wide Average */}
-          <div className="text-gray-400 text-sm text-center mt-4">
-            League-Wide Average:{" "}
-            <span className="text-green-400">{leagueAvg.toFixed(1)}</span>
-          </div>
-        </div>
-      );
-    })}
-  </div>
-</CardContent>
-
+                  );
+                })}
+              </div>
+            </CardContent>
           </Card>
           <Card className="bg-gray-800 border-blue-400">
             <CardHeader>
@@ -1004,7 +745,7 @@ export default function Home() {
                               </p>
                             </div>
                             <div className="bg-green-500 text-white text-sm px-3 py-1 rounded-full">
-                              {player.statValue.toFixed(1)} {player.stat}
+                              {player.recent_average.toFixed(1)} {player.stat}
                             </div>
                           </div>
                         </li>
@@ -1054,7 +795,7 @@ export default function Home() {
                               </p>
                             </div>
                             <div className="bg-red-500 text-white text-sm px-3 py-1 rounded-full">
-                              {player.statValue.toFixed(1)} {player.stat}
+                              {player.recent_average.toFixed(1)} {player.stat}
                             </div>
                           </div>
                         </li>
@@ -1069,26 +810,45 @@ export default function Home() {
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-gray-800 border-blue-400">
+          <Card className="bg-gray-800 border-blue-400 flex flex-col h-[1100px]">
             <CardHeader>
-              <CardTitle className="text-blue-400 text-center">
+              <CardTitle className="text-blue-400 text-center mb-4">
                 Players to Watch
               </CardTitle>
+              <div className="flex justify-center space-x-2">
+                {["All", "Overperforming", "Underperforming"].map((filter) => (
+                  <Button
+                    key={filter}
+                    variant={
+                      performanceFilter === filter ? "default" : "outline"
+                    }
+                    className={`px-3 py-1 text-sm ${
+                      performanceFilter === filter
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                    }`}
+                    onClick={() =>
+                      setPerformanceFilter(
+                        filter as "All" | "Overperforming" | "Underperforming"
+                      )
+                    }
+                  >
+                    {filter}
+                  </Button>
+                ))}
+              </div>
             </CardHeader>
-            <CardContent>
-              <ul className="space-y-4">
+            <CardContent className="overflow-y-auto flex-1 px-2 custom-scrollbar">
+              <ul className="space-y-4 pr-2">
                 {playersToWatch.map((player, index) => (
                   <li
                     key={index}
                     className="bg-gray-800 p-4 rounded-lg shadow-md flex items-center justify-between"
                   >
                     <div className="flex items-center space-x-4">
-                      {/* Player Avatar Placeholder */}
                       <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center text-xl font-bold text-blue-400">
-                        {player.player_name[0]}{" "}
-                        {/* First letter of player's name */}
+                        {player.player_name[0]}
                       </div>
-                      {/* Player Info */}
                       <div>
                         <p className="text-lg font-semibold text-blue-400">
                           {player.player_name}
@@ -1102,7 +862,6 @@ export default function Home() {
                       </div>
                     </div>
                     <div className="text-right">
-                      {/* Last 3 Avg */}
                       <p className="text-sm text-gray-300">
                         <span className="font-bold text-green-400">
                           Last 3 Avg:
@@ -1110,9 +869,8 @@ export default function Home() {
                         <span className="font-semibold text-white">
                           {player.last_3_avg.toFixed(1)}
                         </span>{" "}
-                        {player.statToDisplay}
+                        {player.stat_to_display}
                       </p>
-                      {/* Season Avg */}
                       <p className="text-sm text-gray-300">
                         <span className="font-bold text-yellow-400">
                           Season Avg:
@@ -1120,19 +878,18 @@ export default function Home() {
                         <span className="font-semibold text-white">
                           {player.season_avg.toFixed(1)}
                         </span>{" "}
-                        {player.statToDisplay}
+                        {player.stat_to_display}
                       </p>
-                      {/* Matchup Type */}
                       <p
                         className={`inline-block px-2 py-1 text-sm font-bold rounded-full text-white ${
-                          player.matchupType === "Great Matchup"
+                          player.matchup_type === "Great Matchup"
                             ? "bg-green-900"
-                            : player.matchupType === "Good Matchup"
+                            : player.matchup_type === "Good Matchup"
                             ? "bg-green-600"
                             : "bg-red-400"
                         }`}
                       >
-                        {player.matchupType}
+                        {player.matchup_type}
                       </p>
                     </div>
                   </li>
