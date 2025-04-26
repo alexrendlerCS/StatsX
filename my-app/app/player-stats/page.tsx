@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -14,6 +13,7 @@ import {
 } from "recharts";
 import { User, Search } from "lucide-react";
 import supabase from "../supabaseClient";
+import { useState, useEffect } from "react";
 
 export default function PlayerStats() {
   const [playerName, setPlayerName] = useState("");
@@ -26,6 +26,28 @@ export default function PlayerStats() {
   const [selectedStat, setSelectedStat] = useState("rushing_yards");
   const [customValue, setCustomValue] = useState(null); // User-defined value for the chart
   const [searchPerformed, setSearchPerformed] = useState(false); // Tracks if search is performed
+  
+  // Add this state near the top
+  const [weeklyLeaders, setWeeklyLeaders] = useState([]);
+
+  // Fetch top 1 players per position (rank 1)
+  useEffect(() => {
+    const fetchWeeklyLeaders = async () => {
+      const { data, error } = await supabase
+        .from("weekly_leaders")
+        .select("*")
+        .eq("rank", 1); // Only rank 1 players
+
+      if (error) {
+        console.error("❌ Error fetching weekly leaders:", error.message);
+        return;
+      }
+
+      setWeeklyLeaders(data);
+    };
+
+    fetchWeeklyLeaders();
+  }, []);
 
   const normalizeString = (str) =>
     str
@@ -220,52 +242,110 @@ export default function PlayerStats() {
         </h1>
       </div>
 
-      <Card className="bg-gray-800 border-blue-400">
-        <CardHeader>
-          <CardTitle className="text-blue-400 flex items-center space-x-2">
-            <Search className="w-6 h-6" />
-            <span>Find Player</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="relative">
-              <Input
-                type="text"
-                placeholder="Enter player name"
-                value={playerName}
-                onChange={(e) => {
-                  setPlayerName(e.target.value);
-                  fetchSuggestions(e.target.value);
-                }}
-                className="bg-gray-700 text-gray-100 border-gray-600 max-w-md"
-              />
-              {suggestions.length > 0 && (
-                <ul className="absolute z-10 bg-gray-700 border border-gray-600 max-w-md mt-1 rounded shadow-lg">
-                  {suggestions.map((suggestion, index) => (
-                    <li
-                      key={index}
-                      onClick={() => {
-                        setPlayerName(suggestion);
-                        setSuggestions([]);
-                      }}
-                      className="px-4 py-2 text-gray-100 cursor-pointer hover:bg-gray-600"
+      {/* Centering the search card */}
+      <div className="flex justify-center">
+        <Card className="bg-gray-800 border-blue-400 w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-blue-400 flex items-center space-x-2">
+              <Search className="w-6 h-6" />
+              <span>Find Player</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Player Name
+                </label>
+                <Input
+                  type="text"
+                  placeholder="Enter player name"
+                  value={playerName}
+                  onChange={(e) => {
+                    setPlayerName(e.target.value);
+                    fetchSuggestions(e.target.value);
+                  }}
+                  className="bg-gray-700 text-gray-100 border-gray-600 w-full"
+                />
+                {suggestions.length > 0 && (
+                  <ul className="absolute z-10 bg-gray-700 border border-gray-600 w-full mt-1 rounded shadow-lg">
+                    {suggestions.map((suggestion, index) => (
+                      <li
+                        key={index}
+                        onClick={() => {
+                          setPlayerName(suggestion);
+                          setSuggestions([]);
+                        }}
+                        className="px-4 py-2 text-gray-100 cursor-pointer hover:bg-gray-600"
+                      >
+                        {suggestion}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <Button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Search
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+
+      {!searchPerformed && weeklyLeaders.length > 0 && (
+        <div className="w-full">
+          <Card className="bg-gray-800 border-blue-500 w-full shadow-lg px-6 py-4 rounded-lg">
+            <CardHeader>
+              <CardTitle className="text-blue-400 text-xl font-bold flex items-center gap-2">
+                🏆 Best Stats of Week
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {weeklyLeaders.map((player) => {
+                  // Map stat type by position or add logic if needed
+                  const statType =
+                    player.position_id === "QB"
+                      ? "Passing Yards"
+                      : player.position_id === "RB"
+                      ? "Rushing Yards"
+                      : ["WR", "TE"].includes(player.position_id)
+                      ? "Receiving Yards"
+                      : "Stat";
+
+                  return (
+                    <div
+                      key={player.id}
+                      className="bg-gray-900 border border-blue-500 rounded-lg p-4 hover:bg-gray-700 transition-all cursor-pointer"
+                      onClick={() => setPlayerName(player.player_name)}
                     >
-                      {suggestion}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <Button
-              type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              Search
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+                      <div className="text-lg font-bold text-white">
+                        {player.player_name}
+                        <span className="text-sm text-gray-400">
+                          {" "}
+                          ({player.position_id})
+                        </span>
+                      </div>
+                      <div className="text-sm text-blue-300 mt-2 font-medium">
+                        {statType}:{" "}
+                        <span className="text-white font-bold">
+                          {player.stat_value}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-400 mt-1">
+                        Matchup: {player.matchup}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Conditionally render sections */}
       {searchPerformed && (

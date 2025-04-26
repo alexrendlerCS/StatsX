@@ -88,6 +88,7 @@ def generate_and_store_projections():
         """, (normalized_name,))
         stats = cursor.fetchall()
         if not stats:
+            print(f"⛔ Skipped {player_name}: No player stats found")
             continue
 
         # Get opponent
@@ -96,13 +97,15 @@ def generate_and_store_projections():
         opp = opp_cursor.fetchone()
         opp_cursor.close()
         if not opp:
+            print(f"⛔ Skipped {player_name}: No opponent found for team {team_id}")
             continue
-        opponent_id = opp[0]
+        opponent_id = opp[0].replace("@", "").replace("JAX", "JAC")
 
         # Get defense and league row
         defense = defense_qb_map.get(opponent_id) if position_id == "QB" else defense_map.get((opponent_id, position_id))
         league = league_qb_averages if position_id == "QB" else league_pos_map.get(position_id)
         if not defense or not league:
+            print(f"⛔ Skipped {player_name}: Missing defense or league data for team {opponent_id}, position {position_id}")
             continue
 
         stat_keys = position_stat_map.get(position_id, [])
@@ -118,6 +121,7 @@ def generate_and_store_projections():
             values = [float(row[stat_idx]) for row in stats if row[stat_idx] is not None]
 
             if not values:
+                print(f"⛔ Skipped {player_name}: No non-null values for stat {stat}")
                 continue
 
             player_avg = sum(values) / len(values)

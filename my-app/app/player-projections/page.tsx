@@ -28,7 +28,6 @@ import {
 
 export default function PlayerProjections() {
   const [playerName, setPlayerName] = useState("");
-  const [defenseTeam, setDefenseTeam] = useState("");
   const [position, setPosition] = useState("");
   const [projections, setProjections] = useState({});
   const [suggestions, setSuggestions] = useState([]);
@@ -39,6 +38,8 @@ export default function PlayerProjections() {
   const [fetchTriggered, setFetchTriggered] = useState(false); // Tracks whether projections should be fetched
    // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [error, setError] = useState<string | null>(null); // Error state
+  const [topPicks, setTopPicks] = useState([]);
+
     
   // Utility function to normalize strings
   const normalizeString = (str) =>
@@ -89,6 +90,141 @@ export default function PlayerProjections() {
       { label: "Rushing TDs", key: "rushing_tds" },
     ],
   };
+
+useEffect(() => {
+  const fetchTopPicks = async () => {
+    const normalizeStringFrontend = (str: string) =>
+      str
+        .toLowerCase()
+        .replace(/[-.`'’]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const { data, error } = await supabase.from("players_to_watch").select("*");
+
+    if (error) {
+      console.error("❌ Error fetching top picks:", error.message);
+      return;
+    }
+
+    if (data) {
+      console.log("✅ players_to_watch:", data);
+
+      // Step 1: Compute performance gap
+      const enrichedData = data.map((player) => ({
+        ...player,
+        performance_gap: Math.abs(
+          (player.last_3_avg || 0) - (player.season_avg || 0)
+        ),
+      }));
+
+      // Step 2: Group players by position
+      const groupedByPosition: Record<string, any[]> = {};
+      enrichedData.forEach((player) => {
+        if (!groupedByPosition[player.position]) {
+          groupedByPosition[player.position] = [];
+        }
+        groupedByPosition[player.position].push(player);
+      });
+
+      // Step 3: Sort within each position and pick top 2
+      const topPlayers: any[] = [];
+      ["QB", "RB", "WR", "TE"].forEach((position) => {
+        const players = groupedByPosition[position] || [];
+        const topTwo = players
+          .sort((a, b) => b.performance_gap - a.performance_gap)
+          .slice(0, 2);
+        topPlayers.push(...topTwo);
+      });
+
+      console.log(
+        "✅ Top players by position:",
+        topPlayers.map((p) => p.player_name)
+      );
+
+      // Step 4: Fetch projections
+      const projectionQuery = await supabase
+        .from("player_projections")
+        .select("normalized_name, opponent, stat_key, projection");
+
+      if (projectionQuery.error) {
+        console.error(
+          "❌ Error fetching projections:",
+          projectionQuery.error.message
+        );
+        return;
+      }
+
+      const projectionsMap: Record<string, Record<string, number>> = {};
+      projectionQuery.data.forEach((row) => {
+        const key = `${normalizeStringFrontend(
+          row.normalized_name
+        )}_${row.opponent.toLowerCase()}`;
+        if (!projectionsMap[key]) {
+          projectionsMap[key] = {};
+        }
+        projectionsMap[key][row.stat_key] = row.projection;
+      });
+
+      // Step 5: Map stat display label to database key
+      const mapStatToProjection = (label: string) => {
+        const mapping = {
+          "Passing Attempts": "passing_attempts",
+          Completions: "completions",
+          "Passing Yards": "passing_yards",
+          "Passing TDs": "passing_tds",
+          Interceptions: "interceptions",
+          "Rushing Attempts": "rushing_attempts",
+          "Rushing Yards": "rushing_yards",
+          "Rushing TDs": "rushing_tds",
+          Targets: "targets",
+          Receptions: "receptions",
+          "Receiving Yards": "receiving_yards",
+          "Receiving TDs": "receiving_tds",
+        };
+        return mapping[label.trim()] || label.toLowerCase();
+      };
+
+      // Step 6: Enrich players with projections
+      const enriched = topPlayers.map((player) => {
+        const statKey = mapStatToProjection(player.stat_to_display);
+        const normName = normalizeStringFrontend(player.normalized_name);
+        const opponent = player.opponent
+          ? player.opponent.toLowerCase().trim()
+          : "";
+
+        const composedKey = `${normName}_${opponent}`;
+        let playerProjections = projectionsMap[composedKey];
+
+        if (!playerProjections) {
+          console.warn(
+            `❌ No projections found for ${normName} vs ${opponent}`
+          );
+          const fallbackKey = Object.keys(projectionsMap).find((k) =>
+            k.startsWith(normName)
+          );
+          if (fallbackKey) {
+            playerProjections = projectionsMap[fallbackKey];
+          }
+        }
+
+        const projectionValue = playerProjections?.[statKey];
+
+        return {
+          ...player,
+          projection: projectionValue ?? "N/A",
+        };
+      });
+
+      console.log("✅ Final enriched top picks:", enriched);
+
+      setTopPicks(enriched);
+    }
+  };
+
+  fetchTopPicks();
+}, []);
+
 
   useEffect(() => {
     if (fetchTriggered && playerName.trim()) {
@@ -215,129 +351,55 @@ export default function PlayerProjections() {
 
   const fetchProjections = async () => {
     setError(null); // Clear previous errors
-    if (!playerName || !defenseTeam) {
-      setError("Please provide both a player name and defense team.");
+    if (!playerName) {
+      setError("Please provide a player name.");
       return;
     }
 
     try {
-      // Fetch player stats
-      // Compare normalized names in the database:
-      const { data: playerStats, error: playerStatsError } = await supabase
+      const normalizedName = normalizeString(playerName);
+
+      // Fetch player info to get position
+      const { data: playerInfo, error: playerInfoError } = await supabase
         .from("player_stats")
-        .select("*")
-        .eq("normalized_name", normalizedPlayerName);
-      if (playerStatsError) {
-        console.error("Error fetching player stats:", playerStatsError.message);
-        return;
-      }
-      if (!playerStats || playerStats.length === 0) {
-        console.warn("No player stats found for:", playerName);
-        return;
-      }
+        .select("position_id")
+        .eq("normalized_name", normalizedName)
+        .limit(1)
+        .single();
 
-      const positionId = playerStats[0].position_id;
-      setPosition(positionId);
-
-      // Fetch defense stats
-      const defenseTable =
-        positionId === "QB" ? "defense_averages_qb" : "defense_averages";
-      let defenseQuery = supabase
-        .from(defenseTable)
-        .select("*")
-        .eq("team_id", defenseTeam);
-
-      if (positionId !== "QB") {
-        defenseQuery = defenseQuery.eq("position_id", positionId);
-      }
-
-      const { data: defenseStats, error: defenseStatsError } =
-        await defenseQuery;
-
-      if (defenseStatsError) {
-        console.error(
-          "Error fetching defense stats:",
-          defenseStatsError.message
-        );
-        return;
-      }
-      if (!defenseStats || defenseStats.length === 0) {
-        console.warn("No defense stats found for team:", defenseTeam);
+      if (playerInfoError || !playerInfo) {
+        console.error("Error fetching player info:", playerInfoError?.message);
         return;
       }
 
-      // Fetch league stats
-      const leagueTable =
-        positionId === "QB"
-          ? "all_defense_averages_qb"
-          : "all_defense_averages";
-      let leagueQuery = supabase.from(leagueTable).select("*");
+      setPosition(playerInfo.position_id); // Set player's position for stat mappings
 
-      if (positionId === "QB") {
-        leagueQuery = supabase
-          .from(leagueTable)
-          .select(
-            "avg_qb_rushing_attempts, avg_qb_rushing_yards, avg_qb_rushing_tds, avg_passing_attempts, avg_completions, avg_passing_yards, avg_passing_tds, avg_interceptions"
-          );
-      } else {
-        leagueQuery = leagueQuery.eq("position_id", positionId);
-      }
+      // ✅ Now fetch projections directly
+      const { data: projectionRows, error: projectionError } = await supabase
+        .from("player_projections")
+        .select("stat_key, projection")
+        .eq("normalized_name", normalizedName);
 
-      const { data: leagueStats, error: leagueStatsError } = await leagueQuery;
-
-      if (leagueStatsError) {
-        console.error("Error fetching league stats:", leagueStatsError.message);
-        return;
-      }
-      if (!leagueStats || leagueStats.length === 0) {
-        console.warn("No league stats found for position:", positionId);
+      if (projectionError) {
+        console.error("Error fetching projections:", projectionError.message);
         return;
       }
 
-      const leagueStat = leagueStats[0]; // Declare only once
-      console.log("League Stats Data:", leagueStat);
+      if (!projectionRows || projectionRows.length === 0) {
+        console.warn("No projections found for:", playerName);
+        return;
+      }
 
-      // Calculate projections
-      const playerWeight = 0.7;
-      const defenseWeight = 0.3;
-      const projection = {};
+      // Build projections object: { passing_yards: 275.5, rushing_yards: 20.2, etc. }
+      const projection: Record<string, number> = {};
 
-      for (const stat of relevantStats[positionId] || []) {
-        const defenseKey =
-          positionId === "QB" && stat.key.startsWith("rushing")
-            ? `avg_qb_${stat.key}` // Special case for QB rushing stats
-            : `avg_${stat.key}`;
-        const leagueKey =
-          positionId === "QB" && stat.key.startsWith("rushing")
-            ? `avg_qb_${stat.key}` // Special case for QB rushing stats
-            : `avg_${stat.key}`;
-
-        const playerAvg =
-          playerStats.reduce(
-            (sum, statEntry) => sum + (statEntry[stat.key] || 0),
-            0
-          ) / playerStats.length;
-
-        const defenseAvg = defenseStats[0]?.[defenseKey];
-        const leagueAvg = leagueStat?.[leagueKey];
-
-        console.log(`Fetching projections for stat: ${stat.key}`);
-        console.log("Defense Key:", defenseKey);
-        console.log("League Key:", leagueKey);
-        console.log(
-          `Player Avg: ${playerAvg}, Defense Avg: ${defenseAvg}, League Avg: ${leagueAvg}`
-        );
-
-        if (playerAvg && defenseAvg && leagueAvg) {
-          const defenseImpact = playerAvg * (defenseAvg / leagueAvg);
-          projection[stat.key] =
-            playerAvg * playerWeight + defenseImpact * defenseWeight;
-        } else {
-          projection[stat.key] = 0; // Default to 0 if data is missing
+      projectionRows.forEach((row) => {
+        if (row.stat_key && row.projection !== undefined) {
+          projection[row.stat_key] = row.projection;
         }
-      }
+      });
 
-      console.log("Projections:", JSON.stringify(projection, null, 2));
+      console.log("✅ Projections loaded from database:", projection);
 
       setProjections(projection);
     } catch (error) {
@@ -345,11 +407,12 @@ export default function PlayerProjections() {
     }
   };
 
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null); // Clear previous errors
-    if (!playerName || !defenseTeam) {
-      setError("Player name and defense team are required."); // Set error
+    if (!playerName) {
+      setError("Player name is required."); // Set error
       return;
     }
     setFetchTriggered(true); // Enable fetching and rendering
@@ -470,88 +533,129 @@ export default function PlayerProjections() {
   return (
     <div className="flex-grow">
       <div className="space-y-8">
-        {/* Player Projections Form */}
-        <Card className="bg-gray-800 border-blue-400">
-          <CardHeader>
-            <div className="flex items-center space-x-2">
-              <BarChart3 className="w-6 h-6 text-blue-400" />
-              <CardTitle className="text-blue-400">
-                Player Projections
-              </CardTitle>
-            </div>
-          </CardHeader>
+        {/* Header */}
+        <div className="flex items-center justify-center space-x-2">
+          <BarChart3 className="w-8 h-8 text-blue-400" />
+          <h1 className="text-4xl font-bold text-center text-blue-400">
+            Player Projections
+          </h1>
+        </div>
 
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Centering the form fields */}
-              <div className="flex flex-col md:flex-row justify-center items-end gap-6">
-                {/* Player Name Input with Suggestions */}
-                <div className="w-full md:w-1/2">
+        {/* Search Card */}
+        <div className="flex justify-center">
+          <Card className="bg-gray-800 border-blue-400 w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="text-blue-400 flex items-center space-x-2">
+                <BarChart3 className="w-6 h-6" />
+                <span>Find Player</span>
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Player Name Input */}
+                <div className="relative">
                   <label className="block text-sm font-medium text-gray-400 mb-2">
                     Player Name
                   </label>
-                  <div className="relative">
-                    <Input
-                      type="text"
-                      placeholder="Enter player name"
-                      value={playerName}
-                      onChange={(e) => {
-                        setPlayerName(e.target.value);
-                        fetchSuggestions(e.target.value);
-                      }}
-                      className="bg-gray-700 text-gray-100 border-gray-600 rounded-lg w-full"
-                    />
-                    {suggestions.length > 0 && (
-                      <ul className="absolute z-10 bg-gray-700 border border-gray-600 w-full mt-1 rounded-lg shadow-lg">
-                        {suggestions.map((suggestion, index) => (
-                          <li
-                            key={index}
-                            onClick={() => {
-                              setPlayerName(suggestion);
-                              setSuggestions([]);
-                            }}
-                            className="px-4 py-2 text-gray-100 cursor-pointer hover:bg-gray-600"
-                          >
-                            {suggestion}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </div>
-
-                {/* Team Dropdown */}
-                <div className="w-full md:w-1/2">
-                  <label className="block text-sm font-medium text-gray-400 mb-2">
-                    Team
-                  </label>
-                  <Select onValueChange={setDefenseTeam}>
-                    <SelectTrigger className="w-full bg-gray-700 text-gray-100 border-gray-600 rounded-lg px-4 py-2">
-                      <SelectValue placeholder="Select a team" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {nflTeams.map((team) => (
-                        <SelectItem key={team.id} value={team.id}>
-                          {team.name}
-                        </SelectItem>
+                  <Input
+                    type="text"
+                    placeholder="Enter player name"
+                    value={playerName}
+                    onChange={(e) => {
+                      setPlayerName(e.target.value);
+                      fetchSuggestions(e.target.value);
+                    }}
+                    className="bg-gray-700 text-gray-100 border-gray-600 w-full"
+                  />
+                  {suggestions.length > 0 && (
+                    <ul className="absolute z-10 bg-gray-700 border border-gray-600 w-full mt-1 rounded shadow-lg">
+                      {suggestions.map((suggestion, index) => (
+                        <li
+                          key={index}
+                          onClick={() => {
+                            setPlayerName(suggestion);
+                            setSuggestions([]);
+                          }}
+                          className="px-4 py-2 text-gray-100 cursor-pointer hover:bg-gray-600"
+                        >
+                          {suggestion}
+                        </li>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </ul>
+                  )}
                 </div>
-              </div>
 
-              {/* Submit Button */}
-              <div>
+                {/* Submit Button */}
                 <Button
                   type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                 >
                   Generate Projection
                 </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+
+        {!fetchTriggered && topPicks.length > 0 && (
+          <div className="w-full">
+            <Card className="bg-gray-800 border-blue-400 w-full shadow-lg px-6 py-4">
+              <CardHeader>
+                <CardTitle className="text-blue-400 text-xl font-bold">
+                  🔥 Our Top Picks
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col md:grid md:grid-cols-2 gap-y-4 gap-x-6">
+                  {topPicks.map((player) => {
+                    const isOver = player.last_3_avg > player.season_avg;
+                    const perfColor = isOver
+                      ? "text-green-400"
+                      : "text-red-400";
+                    const perfLabel = isOver ? "Over" : "Under";
+
+                    const statKey = player.stat_to_display;
+
+                    return (
+                      <div
+                        key={player.id}
+                        className="bg-gray-900 rounded-lg p-4 hover:bg-gray-700 transition-all cursor-pointer"
+                        onClick={() => setPlayerName(player.player_name)}
+                      >
+                        <div className="text-lg font-semibold text-gray-100">
+                          {player.player_name}{" "}
+                          <span className="text-sm text-gray-400">
+                            ({player.position})
+                          </span>
+                        </div>
+
+                        <div className="text-sm text-gray-300 mt-1">
+                          <span className="font-medium text-blue-300">
+                            {statKey}:
+                          </span>{" "}
+                          Last 3 Avg: {player.last_3_avg?.toFixed(1)} • Season
+                          Avg: {player.season_avg?.toFixed(1)}
+                        </div>
+
+                        <div className="text-sm mt-1">
+                          <span className={`${perfColor} font-semibold`}>
+                            {perfLabel}
+                          </span>{" "}
+                          •{" "}
+                          <span className="text-gray-300">
+                            vs {player.opponent}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {fetchTriggered && (
           <div className="flex space-x-4">
             {/* Performance Trends */}
@@ -763,8 +867,7 @@ export default function PlayerProjections() {
                   {relevantStats[position]?.map((stat) => {
                     const normalizedPlayerName = normalizeString(playerName);
                     const mappedStatKey = mapStatToMarket(stat.label);
-                    console.log("Normalized Player Name:", normalizedPlayerName);
-                    console.log("Available Keys in Player Lines:", Object.keys(playerLines));
+
                     let playerLine =
                       playerLines[normalizedPlayerName]?.[mappedStatKey] ||
                       "N/A";
@@ -781,12 +884,16 @@ export default function PlayerProjections() {
                     }
 
                     const playerLineValue = parseFloat(playerLine) || 0;
-                    const projectedValue =
-                      projections[stat.key]?.toFixed(2) || "N/A";
+                    const projectedValue = projections[stat.key];
+
+                    let projectionDisplay = "N/A";
+                    if (projectedValue !== undefined) {
+                      projectionDisplay = projectedValue.toFixed(2);
+                    }
 
                     let projectionColor = "text-gray-100";
-                    if (projectedValue !== "N/A") {
-                      const projectedFloat = parseFloat(projectedValue);
+                    if (projectedValue !== undefined) {
+                      const projectedFloat = projectedValue;
                       if (projectedFloat > playerLineValue + 1.5) {
                         projectionColor = "text-green-500 font-bold";
                       } else if (
@@ -797,7 +904,7 @@ export default function PlayerProjections() {
                         projectionColor = "text-red-500 font-bold";
                       }
                     }
-                    
+
                     return (
                       <tr
                         key={stat.key}
@@ -809,7 +916,7 @@ export default function PlayerProjections() {
                         <td
                           className={`py-3 px-6 text-lg font-medium ${projectionColor}`}
                         >
-                          {projectedValue}
+                          {projectionDisplay}
                         </td>
                         <td className="py-3 px-6 text-red-500 text-lg font-medium">
                           {playerLine}

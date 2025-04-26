@@ -19,12 +19,15 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={`${inter.className} bg-gray-900 text-gray-100 flex flex-col min-h-screen`}>
         <Header />
-        <main className="container mx-auto px-4 py-8 flex-grow">
-          {children}
-        </main>
-        <Footer />
+
+        {/* Main wrapper ensures footer stays pushed down */}
+        <div className="flex flex-col flex-grow">
+          <main className="container mx-auto px-4 py-8">
+            {children}
+          </main>
+          <Footer />
+        </div>
       </body>
     </html>
   )
 }
-

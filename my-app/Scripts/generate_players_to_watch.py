@@ -11,7 +11,7 @@ DB_NAME = os.getenv("SUPABASE_DB")
 DB_USER = os.getenv("SUPABASE_USER")
 DB_PASSWORD = os.getenv("SUPABASE_PASSWORD")
 
-CURRENT_WEEK = 16  # Update as needed
+CURRENT_WEEK = 17  # Update as needed
 
 def connect_db():
     return psycopg2.connect(
@@ -21,6 +21,9 @@ def connect_db():
         user=DB_USER,
         password=DB_PASSWORD
     )
+
+def normalize_name(name):
+    return name.lower().replace("-", "").replace(".", "").replace("’", "").replace("'", "").replace("`", "").strip()
 
 def generate_players_to_watch():
     conn = connect_db()
@@ -142,7 +145,7 @@ def generate_players_to_watch():
         if not defense_val:
             continue
 
-        matchup_score = defense_val - league_avg[stat_used]
+        matchup_score = league_avg[stat_used] - defense_val
 
         matchup_type = "Bad Matchup"
         if matchup_score > 20:
@@ -156,6 +159,7 @@ def generate_players_to_watch():
         ):
             performance_type = "Overperforming" if is_overperforming else "Underperforming"
             players_to_watch.append((
+                normalize_name(player_name),  # ✅ normalized_name
                 player_name,
                 position,
                 {
@@ -170,14 +174,16 @@ def generate_players_to_watch():
                 performance_type
             ))
 
+
     # Insert into table
     cursor.execute("DELETE FROM players_to_watch")
     execute_values(cursor, """
         INSERT INTO players_to_watch (
-            player_name, position, stat_to_display, last_3_avg,
+            normalized_name, player_name, position, stat_to_display, last_3_avg,
             season_avg, opponent, matchup_type, performance_type
         ) VALUES %s
     """, players_to_watch)
+
 
     conn.commit()
     cursor.close()
