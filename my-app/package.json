@@ -2,11 +2,13 @@
   "name": "my-app",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
+    "scripts": {
     "dev": "next dev",
+    "build": "next build",              
     "build-no-check": "next build && tsc --noEmit",
     "start": "next start",
-    "vercel-build": "next build"
+    "vercel-build": "next build",
+    "lint": "next lint"                  
   },
   "dependencies": {
     "@radix-ui/react-select": "^2.1.3",

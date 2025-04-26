@@ -4,13 +4,6 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { BarChart3 } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import Papa from "papaparse";
 import supabase from "../supabaseClient";
@@ -90,6 +83,23 @@ export default function PlayerProjections() {
       { label: "Rushing TDs", key: "rushing_tds" },
     ],
   };
+  
+interface Player {
+  id: number;
+  player_name: string;
+  position: string;
+  normalized_name: string;
+  opponent: string;
+  stat_to_display: string;
+  last_3_avg: number;
+  season_avg: number;
+  matchup_type: string;
+  performance_type: string;
+}
+
+interface EnrichedPlayer extends Player {
+  performance_gap: number;
+}
 
 useEffect(() => {
   const fetchTopPicks = async () => {
@@ -119,7 +129,11 @@ useEffect(() => {
       }));
 
       // Step 2: Group players by position
-      const groupedByPosition: Record<string, any[]> = {};
+      const groupedByPosition: Record<string, EnrichedPlayer[]> = {};
+  
+
+
+
       enrichedData.forEach((player) => {
         if (!groupedByPosition[player.position]) {
           groupedByPosition[player.position] = [];
@@ -128,7 +142,7 @@ useEffect(() => {
       });
 
       // Step 3: Sort within each position and pick top 2
-      const topPlayers: any[] = [];
+      const topPlayers: EnrichedPlayer[] = [];
       ["QB", "RB", "WR", "TE"].forEach((position) => {
         const players = groupedByPosition[position] || [];
         const topTwo = players
@@ -228,9 +242,38 @@ useEffect(() => {
 
   useEffect(() => {
     if (fetchTriggered && playerName.trim()) {
+      const fetchWeeklyStats = async () => {
+        try {
+          const normalizedName = normalizeString(playerName);
+
+          const { data, error } = await supabase
+            .from("player_stats")
+            .select(
+              "week, rushing_yards, receiving_yards, rushing_tds, receiving_tds, passing_yards, passing_attempts, completions, passing_tds, interceptions, rushing_attempts, receptions"
+            )
+            .eq("normalized_name", normalizedName);
+
+          if (error) {
+            console.error("Error fetching weekly stats:", error.message);
+            setWeeklyStats([]);
+            return;
+          }
+
+          if (data && data.length > 0) {
+            setWeeklyStats(data.sort((a, b) => a.week - b.week));
+          } else {
+            setWeeklyStats([]);
+          }
+        } catch (err) {
+          console.error("Error in fetchWeeklyStats:", err.message);
+          setWeeklyStats([]);
+        }
+      };
+
       fetchWeeklyStats();
     }
   }, [fetchTriggered, playerName]);
+
 
   // Fetch player name suggestions
   const fetchSuggestions = async (query) => {
@@ -472,41 +515,6 @@ useEffect(() => {
     };
     return mapping[label.trim()] || label.toLowerCase();
   };
-
-  const nflTeams = [
-    { id: "SF", name: "49ers" },
-    { id: "CHI", name: "Bears" },
-    { id: "CIN", name: "Bengals" },
-    { id: "BUF", name: "Bills" },
-    { id: "CLE", name: "Browns" },
-    { id: "TB", name: "Buccaneers" },
-    { id: "ARI", name: "Cardinals" },
-    { id: "LAC", name: "Chargers" },
-    { id: "KC", name: "Chiefs" },
-    { id: "IND", name: "Colts" },
-    { id: "WAS", name: "Commanders" },
-    { id: "DAL", name: "Cowboys" },
-    { id: "DEN", name: "Broncos" },
-    { id: "DET", name: "Lions" },
-    { id: "MIA", name: "Dolphins" },
-    { id: "PHI", name: "Eagles" },
-    { id: "ATL", name: "Falcons" },
-    { id: "NYG", name: "Giants" },
-    { id: "JAC", name: "Jaguars" },
-    { id: "NYJ", name: "Jets" },
-    { id: "LAR", name: "Rams" },
-    { id: "LV", name: "Raiders" },
-    { id: "BAL", name: "Ravens" },
-    { id: "CAR", name: "Panthers" },
-    { id: "GB", name: "Packers" },
-    { id: "NE", name: "Patriots" },
-    { id: "NO", name: "Saints" },
-    { id: "SEA", name: "Seahawks" },
-    { id: "PIT", name: "Steelers" },
-    { id: "HOU", name: "Texans" },
-    { id: "TEN", name: "Titans" },
-    { id: "MIN", name: "Vikings" },
-  ];
 
   const placeholderData = [
     { week: "Week 1", value: 0 },

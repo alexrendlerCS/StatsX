@@ -26,7 +26,6 @@ export default function Home() {
   const [suggestions, setSuggestions] = useState([]); // Player name suggestions
   const currentWeek = 17; // Current NFL Week (matchups)
   const previousWeek = currentWeek - 1; // Previous Week (stats)
-  const [selectedFilter, setSelectedFilter] = useState("All"); // "All" | "Overperforming" | "Underperforming"
   const [allPlayersToWatch, setAllPlayersToWatch] = useState([]);
 
   const [performanceFilter, setPerformanceFilter] = useState<
@@ -67,12 +66,13 @@ export default function Home() {
     TE: [],
   });
 
+useEffect(() => {
   const fetchWeeklyLeaders = async () => {
     try {
       const { data, error } = await supabase
         .from("weekly_leaders")
         .select("week, player_name, position_id, stat_value, matchup, rank")
-        .eq("week", previousWeek); // Use week 15 data if current is 16
+        .eq("week", previousWeek);
 
       if (error) throw error;
 
@@ -89,7 +89,6 @@ export default function Home() {
         }
       });
 
-      // Sort by rank just in case and update state
       Object.keys(grouped).forEach((pos) => {
         grouped[pos] = grouped[pos].sort((a, b) => a.rank - b.rank);
       });
@@ -100,9 +99,9 @@ export default function Home() {
     }
   };
 
-  useEffect(() => {
-    fetchWeeklyLeaders();
-  }, []);
+  fetchWeeklyLeaders();
+}, []);
+
 
   const [hotPlayers, setHotPlayers] = useState([]);
   const [coldPlayers, setColdPlayers] = useState([]);
@@ -279,16 +278,6 @@ export default function Home() {
     "Passing TDs",
     "Interceptions",
   ];
-
-  type PlayerStats = {
-    player_name: string;
-    position_id: string;
-    team_id: string;
-    passing_yards: number[];
-    rushing_yards: number[];
-    receiving_yards: number[];
-    week_count: number; // Add this field
-  };
 
   const normalizeString = (str) =>
     str
