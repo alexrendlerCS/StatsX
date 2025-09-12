@@ -88,21 +88,51 @@ export default function PlayerStats() {
     }
   };
 
+  const normalizeNameForMatching = (name) => {
+    // Remove common suffixes and normalize (same logic as backend)
+    let normalized = name.trim();
+
+    // Remove Sr, Jr, III, IV, V suffixes (case insensitive)
+    const suffixesToRemove = [
+      " Sr",
+      " Jr",
+      " III",
+      " IV",
+      " V",
+      " sr",
+      " jr",
+      " iii",
+      " iv",
+      " v",
+    ];
+    for (const suffix of suffixesToRemove) {
+      if (normalized.endsWith(suffix)) {
+        normalized = normalized.slice(0, -suffix.length).trim();
+        break;
+      }
+    }
+
+    // Also try regex approach for more robust matching (handles periods)
+    normalized = normalized.replace(/\s+(Sr|Jr|III|IV|V)\.?$/i, "").trim();
+
+    return normalized;
+  };
+
   const generateNameVariations = (playerName) => {
     const variations = [playerName];
+    const normalized = normalizeNameForMatching(playerName);
 
     // Add variations with Sr, Jr, III, etc.
     const suffixes = [" Sr", " Jr", " III", " IV", " V"];
-    const baseName = playerName.replace(/\s+(Sr|Jr|III|IV|V)$/i, "").trim();
 
-    // Add the base name without suffix
-    if (baseName !== playerName) {
-      variations.push(baseName);
+    // Add the normalized name if different from original
+    if (normalized !== playerName) {
+      variations.push(normalized);
     }
 
     // Add variations with suffixes
     suffixes.forEach((suffix) => {
-      variations.push(baseName + suffix);
+      variations.push(normalized + suffix);
     });
 
     return [...new Set(variations)]; // Remove duplicates
@@ -112,34 +142,54 @@ export default function PlayerStats() {
     try {
       console.log("Fetching averages for player:", playerName);
 
-      // Generate name variations to try
-      const nameVariations = generateNameVariations(playerName);
-      console.log("Trying name variations:", nameVariations);
+      // First try exact match
+      let { data: playerAverages, error } = await supabase
+        .from("player_averages")
+        .select("*")
+        .eq("player_name", playerName);
 
-      let playerAverages = null;
-      let foundName = null;
+      if (error) {
+        console.error("Error fetching player averages:", error.message);
+        throw new Error("Failed to fetch player averages.");
+      }
 
-      // Try each name variation until we find a match
-      for (const nameVariation of nameVariations) {
-        const { data, error } = await supabase
+      // If no exact match, try normalized matching
+      if (!playerAverages || playerAverages.length === 0) {
+        console.log("No exact match found, trying normalized matching...");
+
+        // Get all player averages and find matches using normalized names
+        const { data: allAverages, error: allError } = await supabase
           .from("player_averages")
-          .select("*")
-          .eq("player_name", nameVariation);
+          .select("*");
 
-        if (error) {
+        if (allError) {
           console.error(
-            `Error fetching player averages for ${nameVariation}:`,
-            error.message
+            "Error fetching all player averages:",
+            allError.message
           );
-          continue;
+          throw new Error("Failed to fetch player averages.");
         }
 
-        if (data && data.length > 0) {
-          playerAverages = data;
-          foundName = nameVariation;
-          console.log(`Found player averages with name: ${foundName}`);
-          break;
+        if (allAverages) {
+          const normalizedSearchName = normalizeNameForMatching(playerName);
+          playerAverages = allAverages.filter((player) => {
+            const normalizedPlayerName = normalizeNameForMatching(
+              player.player_name
+            );
+            return (
+              normalizedPlayerName.toLowerCase() ===
+              normalizedSearchName.toLowerCase()
+            );
+          });
+
+          if (playerAverages.length > 0) {
+            console.log(
+              `Found player averages with normalized matching: ${playerAverages[0].player_name}`
+            );
+          }
         }
+      } else {
+        console.log(`Found player averages with exact match: ${playerName}`);
       }
 
       if (!playerAverages || playerAverages.length === 0) {
@@ -176,32 +226,56 @@ export default function PlayerStats() {
       const averagesMap = await fetchPlayerAverages(playerName);
       setAverages(averagesMap);
 
-      // Generate name variations for weekly stats search
-      const nameVariations = generateNameVariations(playerName);
-      let weeklyStats = null;
-      let foundName = null;
+      // First try exact match for weekly stats
+      let { data: weeklyStats, error: statsError } = await supabase
+        .from("player_stats")
+        .select("*")
+        .eq("player_name", playerName);
 
-      // Try each name variation until we find a match
-      for (const nameVariation of nameVariations) {
-        const { data, error } = await supabase
+      if (statsError) {
+        console.error("Error fetching weekly stats:", statsError.message);
+        throw new Error("Failed to fetch player stats.");
+      }
+
+      // If no exact match, try normalized matching
+      if (!weeklyStats || weeklyStats.length === 0) {
+        console.log(
+          "No exact match found for weekly stats, trying normalized matching..."
+        );
+
+        // Get all player stats and find matches using normalized names
+        const { data: allStats, error: allStatsError } = await supabase
           .from("player_stats")
-          .select("*")
-          .eq("player_name", nameVariation);
+          .select("*");
 
-        if (error) {
+        if (allStatsError) {
           console.error(
-            `Error fetching weekly stats for ${nameVariation}:`,
-            error.message
+            "Error fetching all player stats:",
+            allStatsError.message
           );
-          continue;
+          throw new Error("Failed to fetch player stats.");
         }
 
-        if (data && data.length > 0) {
-          weeklyStats = data;
-          foundName = nameVariation;
-          console.log(`Found weekly stats with name: ${foundName}`);
-          break;
+        if (allStats) {
+          const normalizedSearchName = normalizeNameForMatching(playerName);
+          weeklyStats = allStats.filter((player) => {
+            const normalizedPlayerName = normalizeNameForMatching(
+              player.player_name
+            );
+            return (
+              normalizedPlayerName.toLowerCase() ===
+              normalizedSearchName.toLowerCase()
+            );
+          });
+
+          if (weeklyStats.length > 0) {
+            console.log(
+              `Found weekly stats with normalized matching: ${weeklyStats[0].player_name}`
+            );
+          }
         }
+      } else {
+        console.log(`Found weekly stats with exact match: ${playerName}`);
       }
 
       if (!weeklyStats || weeklyStats.length === 0) {

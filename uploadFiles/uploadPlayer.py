@@ -19,6 +19,25 @@ API_KEY = os.getenv("SPORTSDATA_API_KEY")
 position_map = {"WR": "WR", "QB": "QB", "RB": "RB", "TE": "TE"}
 
 
+def normalize_name_for_matching(name):
+    """Normalize names for better matching between CBS and API"""
+    # Remove common suffixes and normalize
+    normalized = name.strip()
+    
+    # Remove Sr, Jr, III, IV, V suffixes (case insensitive)
+    suffixes_to_remove = [' Sr', ' Jr', ' III', ' IV', ' V', ' sr', ' jr', ' iii', ' iv', ' v']
+    for suffix in suffixes_to_remove:
+        if normalized.endswith(suffix):
+            normalized = normalized[:-len(suffix)].strip()
+            break
+    
+    # Also try regex approach for more robust matching (handles periods)
+    import re
+    normalized = re.sub(r'\s+(Sr|Jr|III|IV|V)\.?$', '', normalized, flags=re.IGNORECASE).strip()
+    
+    return normalized
+
+
 def connect_db():
     """Establish a connection to the database."""
     try:
@@ -137,8 +156,12 @@ def merge_stats(scraped_data, api_data, team_mapping):
     }
 
     merged_data = []
+    unmatched_players = []
+    
     for player in scraped_data:
-        # Fix team abbreviation for comparison
+        player_matched = False
+        
+        # Try exact match first
         for api_player in api_data:
             team_abbr = api_player.get("Team")
             corrected_team_abbr = abbreviation_fixes.get(team_abbr, team_abbr)
@@ -146,15 +169,67 @@ def merge_stats(scraped_data, api_data, team_mapping):
                 player['snaps'] = api_player.get('Played', 0)
                 player['team_id'] = team_mapping.get(corrected_team_abbr)
                 player['opponent'] = api_player.get('Opponent')
+                player_matched = True
                 break
-        else:
+        
+        # If exact match failed, try normalized name matching
+        if not player_matched:
+            cbs_normalized = normalize_name_for_matching(player["player_name"])
+            matching_players = []
+            
+            for api_player in api_data:
+                api_name = api_player["Name"]
+                api_normalized = normalize_name_for_matching(api_name)
+                
+                if cbs_normalized.lower() == api_normalized.lower():
+                    matching_players.append(api_player)
+            
+            # If we found multiple matches, be more selective
+            if len(matching_players) > 1:
+                print(f"⚠️  Multiple matches found for {player['player_name']}:")
+                for match in matching_players:
+                    print(f"    {match['Name']} - {match.get('Team', 'N/A')}")
+                
+                # For Deebo Samuel, prefer WAS team
+                if "deebo" in player["player_name"].lower() and "samuel" in player["player_name"].lower():
+                    preferred_match = next((p for p in matching_players if p.get("Team") == "WAS"), None)
+                    if preferred_match:
+                        api_player = preferred_match
+                        print(f"✅ Selected WAS team match for Deebo Samuel: {api_player['Name']}")
+                    else:
+                        api_player = matching_players[0]  # Fallback to first match
+                        print(f"⚠️  No WAS team match found, using first match: {api_player['Name']}")
+                else:
+                    api_player = matching_players[0]  # Use first match for other players
+                    print(f"✅ Using first match: {api_player['Name']}")
+            elif len(matching_players) == 1:
+                api_player = matching_players[0]
+                print(f"✅ Single match found: {api_player['Name']}")
+            else:
+                api_player = None
+            
+            if api_player:
+                team_abbr = api_player.get("Team")
+                corrected_team_abbr = abbreviation_fixes.get(team_abbr, team_abbr)
+                player['snaps'] = api_player.get('Played', 0)
+                player['team_id'] = team_mapping.get(corrected_team_abbr)
+                player['opponent'] = api_player.get('Opponent')
+                print(f"✅ Matched with normalization: {player['player_name']} -> {api_player['Name']} ({corrected_team_abbr})")
+                player_matched = True
+        
+        if not player_matched:
             # Player not found in API
-            print(f"Player {player['player_name']} not found in API data. Excluding from upload.")
+            print(f"❌ No match: {player['player_name']}")
+            unmatched_players.append(player['player_name'])
             continue
         
         # Ensure `team_id` is not None
         if player['team_id']:
             merged_data.append(player)
+
+    if unmatched_players:
+        print(f"\n📊 Summary: {len(merged_data)} players matched, {len(unmatched_players)} unmatched")
+        print(f"Unmatched players: {unmatched_players[:5]}{'...' if len(unmatched_players) > 5 else ''}")
 
     return merged_data
 
