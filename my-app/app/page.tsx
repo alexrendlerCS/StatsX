@@ -32,11 +32,15 @@ export default function Home() {
     "All" | "Overperforming" | "Underperforming"
   >("All");
 
+  const [selectedPosition, setSelectedPosition] = useState<
+    "QB" | "RB" | "WR" | "TE"
+  >("QB");
+
   const [matchupRankings, setMatchupRankings] = useState({
-    QB: { defenses: [] },
-    RB: { defenses: [] },
-    WR: { defenses: [] },
-    TE: { defenses: [] },
+    QB: { defenses: [], leagueAvg: 0 },
+    RB: { defenses: [], leagueAvg: 0 },
+    WR: { defenses: [], leagueAvg: 0 },
+    TE: { defenses: [], leagueAvg: 0 },
   });
   const [playersToWatch, setPlayersToWatch] = useState([]);
   const [teamNames, setTeamNames] = useState({});
@@ -83,9 +87,14 @@ export default function Home() {
           TE: [],
         };
 
+        // Create a map to deduplicate by player_name and position
+        const seenPlayers = new Set();
+
         data.forEach((row) => {
-          if (grouped[row.position_id]) {
+          const playerKey = `${row.player_name}-${row.position_id}`;
+          if (grouped[row.position_id] && !seenPlayers.has(playerKey)) {
             grouped[row.position_id].push(row);
+            seenPlayers.add(playerKey);
           }
         });
 
@@ -211,7 +220,7 @@ export default function Home() {
         return;
       }
 
-      // Fetch league-wide averages
+      // Fetch league-wide averages for RB, WR, TE
       const { data: leagueAvgData, error: leagueAvgError } = await supabase
         .from("all_defense_averages")
         .select("position_id, avg_rushing_yards, avg_receiving_yards");
@@ -224,6 +233,20 @@ export default function Home() {
         return;
       }
 
+      // Fetch QB league-wide averages
+      const { data: qbLeagueAvgData, error: qbLeagueAvgError } = await supabase
+        .from("all_defense_averages_qb")
+        .select("avg_passing_yards")
+        .single();
+
+      if (qbLeagueAvgError) {
+        console.error(
+          "Error fetching QB league-wide averages:",
+          qbLeagueAvgError.message
+        );
+        return;
+      }
+
       // Convert league-wide averages into a lookup
       const leagueAvgMap = leagueAvgData.reduce(
         (acc, stat) => {
@@ -232,15 +255,15 @@ export default function Home() {
             acc[stat.position_id] = stat.avg_receiving_yards;
           return acc;
         },
-        { QB: 0, RB: 0, WR: 0, TE: 0 }
+        { QB: qbLeagueAvgData?.avg_passing_yards || 0, RB: 0, WR: 0, TE: 0 }
       );
 
       // Group rankings by position
       const formattedRankings = {
-        QB: { defenses: [] },
-        RB: { defenses: [] },
-        WR: { defenses: [] },
-        TE: { defenses: [] },
+        QB: { defenses: [], leagueAvg: 0 },
+        RB: { defenses: [], leagueAvg: 0 },
+        WR: { defenses: [], leagueAvg: 0 },
+        TE: { defenses: [], leagueAvg: 0 },
       };
 
       data.forEach((defense) => {
@@ -481,96 +504,115 @@ export default function Home() {
               <CardTitle className="text-blue-400 text-center">
                 Leaders for Week 1
               </CardTitle>
+              {/* Position Tabs */}
+              <div className="flex justify-center space-x-1 mt-4">
+                {(["QB", "RB", "WR", "TE"] as const).map((position) => (
+                  <button
+                    key={position}
+                    onClick={() => setSelectedPosition(position)}
+                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      selectedPosition === position
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                    }`}
+                  >
+                    {position}
+                  </button>
+                ))}
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-8">
-                {["QB", "RB", "WR", "TE"].map((position) => {
-                  const topPlayers = weeklyLeaders[position] || [];
+              <div className="space-y-2">
+                {(() => {
+                  const topPlayers = weeklyLeaders[selectedPosition] || [];
                   return (
-                    <div key={position} className="space-y-6">
+                    <div className="space-y-2">
                       {/* Position Title */}
-                      <h3 className="text-xl font-bold text-gray-200 text-center">
-                        {position} Leaders
+                      <h3 className="text-lg font-bold text-gray-200 text-center border-b border-gray-600 pb-1">
+                        {selectedPosition} Leaders
                       </h3>
                       {topPlayers.length > 0 ? (
-                        <div className="grid grid-cols-3 gap-4">
-                          {topPlayers.map((player, index) => {
-                            const rankStyles = [
-                              {
-                                font: "text-3xl font-extrabold",
-                                icon: "w-8 h-8",
-                                shadow: "text-shadow-lg",
-                                border: "border-4 border-yellow-400",
-                              },
-                              {
-                                font: "text-2xl font-bold",
-                                icon: "w-6 h-6",
-                                shadow: "text-shadow-md",
-                                border: "border-2 border-gray-300",
-                              },
-                              {
-                                font: "text-xl font-semibold",
-                                icon: "w-5 h-5",
-                                shadow: "text-shadow-sm",
-                                border: "border border-orange-400",
-                              },
-                            ][index] || {
-                              font: "text-lg font-medium",
-                              icon: "w-4 h-4",
-                              shadow: "",
-                              border: "",
-                            };
-
-                            return (
-                              <div
-                                key={index}
-                                className={`rounded-lg p-4 shadow-md hover:scale-105 transition transform bg-gradient-to-r ${rankStyles.border}`}
-                              >
-                                <div
-                                  className={`flex justify-between items-center ${rankStyles.font}`}
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-gray-400 border-b border-gray-600">
+                                <th className="text-left py-2 px-2">Rank</th>
+                                <th className="text-left py-2 px-2">Player</th>
+                                <th className="text-right py-2 px-2">
+                                  {selectedPosition === "QB"
+                                    ? "Pass Yards"
+                                    : selectedPosition === "RB"
+                                    ? "Rush Yards"
+                                    : "Rec Yards"}
+                                </th>
+                                <th className="text-left py-2 px-2">Matchup</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {topPlayers.slice(0, 5).map((player, index) => (
+                                <tr
+                                  key={index}
+                                  className={`border-b transition-colors ${
+                                    index === 0
+                                      ? "bg-gradient-to-r from-yellow-900/30 to-yellow-800/20 border-yellow-500/50 hover:from-yellow-900/40 hover:to-yellow-800/30"
+                                      : "border-gray-700 hover:bg-gray-700"
+                                  }`}
                                 >
-                                  {/* Rank Badge */}
-                                  <span className={`${rankStyles.shadow}`}>
-                                    {index === 0
-                                      ? "⭐ 1st"
-                                      : index === 1
-                                      ? "🥈 2nd"
-                                      : "🥉 3rd"}
-                                  </span>
-                                </div>
-                                <div className="text-center">
-                                  {/* Player Name */}
-                                  <p
-                                    className={`${rankStyles.font} text-white`}
+                                  <td className="py-2 px-2">
+                                    <span
+                                      className={`inline-flex items-center justify-center rounded-full font-bold ${
+                                        index === 0
+                                          ? "bg-gradient-to-r from-yellow-400 to-yellow-500 text-black w-8 h-8 text-sm shadow-lg ring-2 ring-yellow-300"
+                                          : index === 1
+                                          ? "bg-gray-300 text-black w-6 h-6 text-xs"
+                                          : index === 2
+                                          ? "bg-orange-500 text-white w-6 h-6 text-xs"
+                                          : "bg-gray-600 text-white w-6 h-6 text-xs"
+                                      }`}
+                                    >
+                                      {index === 0 ? "👑" : index + 1}
+                                    </span>
+                                  </td>
+                                  <td
+                                    className={`py-2 px-2 font-medium ${
+                                      index === 0
+                                        ? "text-yellow-200 text-lg font-bold"
+                                        : "text-white"
+                                    }`}
                                   >
                                     {player.player_name}
-                                  </p>
-                                  {/* Stat Value */}
-                                  <p className="text-gray-300 mt-2">
+                                  </td>
+                                  <td
+                                    className={`py-2 px-2 text-right font-bold ${
+                                      index === 0
+                                        ? "text-yellow-300 text-lg"
+                                        : "text-blue-400"
+                                    }`}
+                                  >
                                     {player.stat_value.toLocaleString()}
-                                    {position === "QB"
-                                      ? " Passing Yards"
-                                      : position === "RB"
-                                      ? " Rushing Yards"
-                                      : " Receiving Yards"}
-                                  </p>
-                                  {/* Matchup */}
-                                  <p className="text-sm text-gray-400 italic mt-1">
-                                    Matchup: {player.matchup}
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })}
+                                  </td>
+                                  <td
+                                    className={`py-2 px-2 text-sm ${
+                                      index === 0
+                                        ? "text-yellow-100"
+                                        : "text-gray-400"
+                                    }`}
+                                  >
+                                    {player.matchup}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
                       ) : (
-                        <p className="text-gray-400 text-center">
-                          No data available for {position}
+                        <p className="text-gray-400 text-center py-4">
+                          No data available for {selectedPosition}
                         </p>
                       )}
                     </div>
                   );
-                })}
+                })()}
               </div>
             </CardContent>
           </Card>
@@ -579,113 +621,149 @@ export default function Home() {
               <CardTitle className="text-blue-400 text-center">
                 Best Defensive Matchups
               </CardTitle>
+              {/* Position Tabs */}
+              <div className="flex justify-center space-x-1 mt-4">
+                {(["QB", "RB", "WR", "TE"] as const).map((position) => (
+                  <button
+                    key={position}
+                    onClick={() => setSelectedPosition(position)}
+                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      selectedPosition === position
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                    }`}
+                  >
+                    {position}
+                  </button>
+                ))}
+              </div>
             </CardHeader>
 
             <CardContent>
-              <div className="space-y-8">
-                {["QB", "RB", "WR", "TE"].map((position) => {
+              <div className="space-y-2">
+                {(() => {
                   const topDefenses =
-                    matchupRankings?.[position]?.defenses.slice(0, 3) || [];
-                  const leagueAvg = matchupRankings?.[position]?.leagueAvg || 0;
+                    matchupRankings?.[selectedPosition]?.defenses.slice(0, 5) ||
+                    [];
+                  const leagueAvg =
+                    matchupRankings?.[selectedPosition]?.leagueAvg || 0;
 
                   return (
-                    <div key={position} className="space-y-6">
+                    <div className="space-y-2">
                       {/* Position Title */}
-                      <h3 className="text-xl font-bold text-gray-200 text-center">
-                        {position} Matchups
+                      <h3 className="text-lg font-bold text-gray-200 text-center border-b border-gray-600 pb-1">
+                        {selectedPosition} Matchups
                       </h3>
 
                       {topDefenses.length > 0 ? (
-                        <div className="grid grid-cols-3 gap-4">
-                          {topDefenses.map((defense, index) => {
-                            const rankStyles = [
-                              {
-                                font: "text-3xl font-extrabold",
-                                outline: "border-4 border-yellow-400",
-                                shadow: "shadow-lg",
-                              },
-                              {
-                                font: "text-2xl font-bold",
-                                outline: "border-4 border-gray-300",
-                                shadow: "shadow-md",
-                              },
-                              {
-                                font: "text-xl font-semibold",
-                                outline: "border-4 border-orange-400",
-                                shadow: "shadow-sm",
-                              },
-                            ][index] || {
-                              font: "text-lg font-medium",
-                              outline: "",
-                              shadow: "",
-                            };
-
-                            return (
-                              <div
-                                key={index}
-                                className={`rounded-lg p-4 shadow-md hover:scale-105 transition-transform bg-gray-800 ${rankStyles.outline}`}
-                              >
-                                {/* Rank */}
-                                <div
-                                  className={`flex justify-between items-center ${rankStyles.font}`}
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-gray-400 border-b border-gray-600">
+                                <th className="text-left py-2 px-2">Rank</th>
+                                <th className="text-left py-2 px-2">Team</th>
+                                <th className="text-right py-2 px-2">
+                                  Avg Allowed
+                                </th>
+                                <th className="text-right py-2 px-2">
+                                  vs League Avg
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {topDefenses.map((defense, index) => (
+                                <tr
+                                  key={index}
+                                  className={`border-b transition-colors ${
+                                    index === 0
+                                      ? "bg-gradient-to-r from-yellow-900/30 to-yellow-800/20 border-yellow-500/50 hover:from-yellow-900/40 hover:to-yellow-800/30"
+                                      : "border-gray-700 hover:bg-gray-700"
+                                  }`}
                                 >
-                                  <span className={`${rankStyles.shadow}`}>
-                                    {index === 0
-                                      ? "⭐ 1st"
-                                      : index === 1
-                                      ? "🥈 2nd"
-                                      : "🥉 3rd"}
-                                  </span>
-                                </div>
-
-                                {/* Team */}
-                                <div className="text-center">
-                                  <p
-                                    className={`${rankStyles.font} text-gray-100 mt-2`}
+                                  <td className="py-2 px-2">
+                                    <span
+                                      className={`inline-flex items-center justify-center rounded-full font-bold ${
+                                        index === 0
+                                          ? "bg-gradient-to-r from-yellow-400 to-yellow-500 text-black w-8 h-8 text-sm shadow-lg ring-2 ring-yellow-300"
+                                          : index === 1
+                                          ? "bg-gray-300 text-black w-6 h-6 text-xs"
+                                          : index === 2
+                                          ? "bg-orange-500 text-white w-6 h-6 text-xs"
+                                          : "bg-gray-600 text-white w-6 h-6 text-xs"
+                                      }`}
+                                    >
+                                      {index === 0 ? "👑" : index + 1}
+                                    </span>
+                                  </td>
+                                  <td
+                                    className={`py-2 px-2 font-medium ${
+                                      index === 0
+                                        ? "text-yellow-200 text-lg font-bold"
+                                        : "text-white"
+                                    }`}
                                   >
                                     {teamNames[defense.team_id] ||
                                       defense.team_id}
-                                  </p>
-
-                                  {/* Stat Value */}
-                                  <p className="text-gray-300 mt-2">
-                                    <span className="font-bold">
-                                      Avg Allowed:
-                                    </span>{" "}
-                                    <span className="text-green-400">
-                                      {parseFloat(defense.avg_stat).toFixed(1)}
+                                  </td>
+                                  <td
+                                    className={`py-2 px-2 text-right font-bold ${
+                                      index === 0
+                                        ? "text-yellow-300 text-lg"
+                                        : "text-green-400"
+                                    }`}
+                                  >
+                                    {parseFloat(defense.avg_stat).toFixed(1)}
+                                  </td>
+                                  <td className="py-2 px-2 text-right">
+                                    <span
+                                      className={`font-medium ${
+                                        index === 0 ? "text-base" : "text-sm"
+                                      } ${
+                                        parseFloat(defense.yards_above_avg) >=
+                                        10
+                                          ? index === 0
+                                            ? "text-yellow-200"
+                                            : "text-green-400"
+                                          : parseFloat(
+                                              defense.yards_above_avg
+                                            ) <= -10
+                                          ? index === 0
+                                            ? "text-yellow-200"
+                                            : "text-red-400"
+                                          : index === 0
+                                          ? "text-yellow-200"
+                                          : "text-yellow-400"
+                                      }`}
+                                    >
+                                      {parseFloat(defense.yards_above_avg) >= 0
+                                        ? "+"
+                                        : ""}
+                                      {parseFloat(
+                                        defense.yards_above_avg
+                                      ).toFixed(1)}
                                     </span>
-                                  </p>
-
-                                  {/* Above League Average */}
-                                  <p className="text-sm text-gray-400 italic">
-                                    (+
-                                    {parseFloat(
-                                      defense.yards_above_avg
-                                    ).toFixed(1)}{" "}
-                                    over league avg)
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
                       ) : (
-                        <p className="text-gray-400 text-center">
-                          No data available for {position}
+                        <p className="text-gray-400 text-center py-4">
+                          No data available for {selectedPosition}
                         </p>
                       )}
 
                       {/* League-Wide Average */}
-                      <div className="text-gray-400 text-sm text-center mt-4">
-                        League-Wide Average:{" "}
-                        <span className="text-green-400">
+                      <div className="text-gray-400 text-xs text-center mt-2 bg-gray-700 rounded px-2 py-1">
+                        League Avg:{" "}
+                        <span className="text-green-400 font-bold">
                           {leagueAvg.toFixed(1)}
                         </span>
                       </div>
                     </div>
                   );
-                })}
+                })()}
               </div>
             </CardContent>
           </Card>

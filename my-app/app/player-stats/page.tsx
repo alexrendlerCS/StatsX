@@ -26,7 +26,7 @@ export default function PlayerStats() {
   const [selectedStat, setSelectedStat] = useState("rushing_yards");
   const [customValue, setCustomValue] = useState(null); // User-defined value for the chart
   const [searchPerformed, setSearchPerformed] = useState(false); // Tracks if search is performed
-  
+
   // Add this state near the top
   const [weeklyLeaders, setWeeklyLeaders] = useState([]);
 
@@ -43,7 +43,18 @@ export default function PlayerStats() {
         return;
       }
 
-      setWeeklyLeaders(data);
+      // Deduplicate by player_name and position_id
+      const seenPlayers = new Set();
+      const uniqueLeaders = data.filter((player) => {
+        const playerKey = `${player.player_name}-${player.position_id}`;
+        if (seenPlayers.has(playerKey)) {
+          return false;
+        }
+        seenPlayers.add(playerKey);
+        return true;
+      });
+
+      setWeeklyLeaders(uniqueLeaders);
     };
 
     fetchWeeklyLeaders();
@@ -77,18 +88,58 @@ export default function PlayerStats() {
     }
   };
 
-  const fetchPlayerAverages = async (normalizedPlayerName) => {
+  const generateNameVariations = (playerName) => {
+    const variations = [playerName];
+
+    // Add variations with Sr, Jr, III, etc.
+    const suffixes = [" Sr", " Jr", " III", " IV", " V"];
+    const baseName = playerName.replace(/\s+(Sr|Jr|III|IV|V)$/i, "").trim();
+
+    // Add the base name without suffix
+    if (baseName !== playerName) {
+      variations.push(baseName);
+    }
+
+    // Add variations with suffixes
+    suffixes.forEach((suffix) => {
+      variations.push(baseName + suffix);
+    });
+
+    return [...new Set(variations)]; // Remove duplicates
+  };
+
+  const fetchPlayerAverages = async (playerName) => {
     try {
-      console.log("Fetching averages for player:", normalizedPlayerName);
+      console.log("Fetching averages for player:", playerName);
 
-      const { data: playerAverages, error } = await supabase
-        .from("player_averages")
-        .select("*")
-        .eq("normalized_name", normalizedPlayerName);
+      // Generate name variations to try
+      const nameVariations = generateNameVariations(playerName);
+      console.log("Trying name variations:", nameVariations);
 
-      if (error) {
-        console.error("Error fetching player averages:", error.message);
-        throw new Error("Failed to fetch player averages.");
+      let playerAverages = null;
+      let foundName = null;
+
+      // Try each name variation until we find a match
+      for (const nameVariation of nameVariations) {
+        const { data, error } = await supabase
+          .from("player_averages")
+          .select("*")
+          .eq("player_name", nameVariation);
+
+        if (error) {
+          console.error(
+            `Error fetching player averages for ${nameVariation}:`,
+            error.message
+          );
+          continue;
+        }
+
+        if (data && data.length > 0) {
+          playerAverages = data;
+          foundName = nameVariation;
+          console.log(`Found player averages with name: ${foundName}`);
+          break;
+        }
       }
 
       if (!playerAverages || playerAverages.length === 0) {
@@ -119,22 +170,38 @@ export default function PlayerStats() {
     setError("");
 
     try {
-      const normalizedPlayerName = normalizeString(playerName);
-      console.log("Normalized Player Name:", normalizedPlayerName);
+      console.log("Searching for player:", playerName);
 
-      // Fetch player averages
-      const averagesMap = await fetchPlayerAverages(normalizedPlayerName);
+      // Fetch player averages using flexible name matching
+      const averagesMap = await fetchPlayerAverages(playerName);
       setAverages(averagesMap);
 
-      // Fetch weekly stats
-      const { data: weeklyStats, error: statsError } = await supabase
-        .from("player_stats")
-        .select("*")
-        .eq("normalized_name", normalizedPlayerName);
+      // Generate name variations for weekly stats search
+      const nameVariations = generateNameVariations(playerName);
+      let weeklyStats = null;
+      let foundName = null;
 
-      if (statsError) {
-        console.error("Error fetching weekly stats:", statsError.message);
-        throw new Error("Failed to fetch player stats.");
+      // Try each name variation until we find a match
+      for (const nameVariation of nameVariations) {
+        const { data, error } = await supabase
+          .from("player_stats")
+          .select("*")
+          .eq("player_name", nameVariation);
+
+        if (error) {
+          console.error(
+            `Error fetching weekly stats for ${nameVariation}:`,
+            error.message
+          );
+          continue;
+        }
+
+        if (data && data.length > 0) {
+          weeklyStats = data;
+          foundName = nameVariation;
+          console.log(`Found weekly stats with name: ${foundName}`);
+          break;
+        }
       }
 
       if (!weeklyStats || weeklyStats.length === 0) {

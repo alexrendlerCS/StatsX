@@ -41,7 +41,7 @@ def generate_weekly_leaders(week):
             FROM player_stats
             WHERE week = %s AND position_id = %s
             ORDER BY {stat_field} DESC
-            LIMIT 3
+            LIMIT 5
         """
         cursor.execute(query, (week, position))
         top_players = cursor.fetchall()
