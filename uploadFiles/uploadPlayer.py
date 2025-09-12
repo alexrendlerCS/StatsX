@@ -2,16 +2,18 @@ import requests
 from bs4 import BeautifulSoup
 import psycopg2
 from psycopg2.extras import execute_values
+import os
+from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+load_dotenv('../my-app/.env')
 
-# Get sensitive info from environment
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
+# Supabase credentials from env
+SUPABASE_HOST = os.getenv("SUPABASE_HOST")
+SUPABASE_PORT = os.getenv("SUPABASE_PORT")
+SUPABASE_DB = os.getenv("SUPABASE_DB")
+SUPABASE_USER = os.getenv("SUPABASE_USER")
+SUPABASE_PASSWORD = os.getenv("SUPABASE_PASSWORD")
 API_KEY = os.getenv("SPORTSDATA_API_KEY")
 
 position_map = {"WR": "WR", "QB": "QB", "RB": "RB", "TE": "TE"}
@@ -21,11 +23,12 @@ def connect_db():
     """Establish a connection to the database."""
     try:
         return psycopg2.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            dbname=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD
+            host=SUPABASE_HOST,
+            port=SUPABASE_PORT,
+            dbname=SUPABASE_DB,
+            user=SUPABASE_USER,
+            password=SUPABASE_PASSWORD,
+            sslmode="require"
         )
     except Exception as e:
         print(f"Error connecting to the database: {e}")
@@ -211,8 +214,8 @@ def upload_to_database(player_data):
 
 
 def main():
-    season = "2024REG"  # Current season
-    total_weeks = 18  # Adjust based on NFL season length
+    season = "2025REG"  # Current season
+    current_week = 2  # Set current week to 2
 
     conn = connect_db()
     cursor = conn.cursor()
@@ -221,18 +224,18 @@ def main():
     cursor.close()
     conn.close()
 
-    for week in range(15, total_weeks + 1):
-        for position, position_code in position_map.items():
-            print(f"Scraping Week {week}, Position {position}")
-            scraped_data = scrape_stats(week, position_code)
-            api_data = fetch_player_stats(season, week)
-            merged_data = merge_stats(scraped_data, api_data, team_mapping)
+    # Upload data for current week only
+    for position, position_code in position_map.items():
+        print(f"Scraping Week {current_week}, Position {position}")
+        scraped_data = scrape_stats(current_week, position_code)
+        api_data = fetch_player_stats(season, current_week)
+        merged_data = merge_stats(scraped_data, api_data, team_mapping)
 
-            # Debugging merged data before uploading
-            print("Sample Merged Data:", merged_data[:3])
+        # Debugging merged data before uploading
+        print("Sample Merged Data:", merged_data[:3])
 
-            upload_to_database(merged_data)
-            print(f"Uploaded data for Week {week}, Position {position}")
+        upload_to_database(merged_data)
+        print(f"Uploaded data for Week {current_week}, Position {position}")
 
 
 if __name__ == "__main__":

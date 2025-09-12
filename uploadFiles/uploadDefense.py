@@ -2,9 +2,11 @@ import requests
 from bs4 import BeautifulSoup
 import psycopg2
 from psycopg2.extras import execute_values
+import os
+from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+load_dotenv('../my-app/.env')
 
 # Supabase credentials from env
 SUPABASE_HOST = os.getenv("SUPABASE_HOST")

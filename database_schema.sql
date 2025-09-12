@@ -23,6 +23,9 @@ DROP TABLE IF EXISTS general_defensive_stats CASCADE;
 DROP TABLE IF EXISTS player_stats CASCADE;
 DROP TABLE IF EXISTS teams CASCADE;
 DROP TABLE IF EXISTS positions CASCADE;
+DROP TABLE IF EXISTS feedback CASCADE;
+DROP TABLE IF EXISTS picks CASCADE;
+DROP TABLE IF EXISTS player_list CASCADE;
 
 -- =====================================================
 -- 1. CORE TABLES
@@ -230,7 +233,38 @@ CREATE TABLE all_defense_averages_qb (
 );
 
 -- =====================================================
--- 5. ANALYSIS TABLES
+-- 5. USER INTERACTION TABLES
+-- =====================================================
+
+-- Feedback table for user feedback
+CREATE TABLE feedback (
+    id SERIAL PRIMARY KEY,
+    content TEXT NOT NULL,
+    email VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Picks table for user-submitted picks
+CREATE TABLE picks (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    player_name VARCHAR(255) NOT NULL,
+    stat VARCHAR(255) NOT NULL,
+    value DECIMAL(8,2) NOT NULL,
+    over_under VARCHAR(10) NOT NULL,
+    reason TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Player list table for autocomplete suggestions
+CREATE TABLE player_list (
+    id SERIAL PRIMARY KEY,
+    player_name VARCHAR(255) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =====================================================
+-- 6. ANALYSIS TABLES
 -- =====================================================
 
 -- Recent player stats (last 3 weeks)
@@ -355,7 +389,7 @@ CREATE TABLE player_lines (
 );
 
 -- =====================================================
--- 6. INDEXES FOR PERFORMANCE
+-- 7. INDEXES FOR PERFORMANCE
 -- =====================================================
 
 -- Player stats indexes
@@ -463,6 +497,9 @@ COMMENT ON TABLE players_to_watch IS 'Players with significant performance chang
 COMMENT ON TABLE weekly_leaders IS 'Top performers by position for each week';
 COMMENT ON TABLE defensive_matchup_rankings IS 'Defensive team rankings by position';
 COMMENT ON TABLE player_lines IS 'Betting lines and projections for player props';
+COMMENT ON TABLE feedback IS 'User feedback and suggestions';
+COMMENT ON TABLE picks IS 'User-submitted player picks and predictions';
+COMMENT ON TABLE player_list IS 'Complete list of players for autocomplete functionality';
 
 -- =====================================================
 -- Schema creation complete!

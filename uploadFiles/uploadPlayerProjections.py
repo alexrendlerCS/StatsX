@@ -2,16 +2,18 @@ import psycopg2
 from psycopg2.extras import execute_values
 from datetime import datetime, timezone
 from decimal import Decimal
+import os
+from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+load_dotenv('../my-app/.env')
 
-# Get sensitive info from environment
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
+# Supabase credentials from env
+SUPABASE_HOST = os.getenv("SUPABASE_HOST")
+SUPABASE_PORT = os.getenv("SUPABASE_PORT")
+SUPABASE_DB = os.getenv("SUPABASE_DB")
+SUPABASE_USER = os.getenv("SUPABASE_USER")
+SUPABASE_PASSWORD = os.getenv("SUPABASE_PASSWORD")
 
 # Connect to Supabase database
 def connect_db():
@@ -132,27 +134,14 @@ def insert_projections(cursor, projections):
         
     query = """
         INSERT INTO player_projections (
-            player_name, position, team_id, week, opponent_id,
-            projected_rushing_attempts, projected_rushing_yards, projected_rushing_tds,
-            projected_receptions, projected_receiving_yards, projected_receiving_tds
+            player_name, normalized_name, position, opponent, stat_key, projection
         ) VALUES %s
-        ON CONFLICT (player_name, week) DO UPDATE
-        SET 
-            projected_rushing_attempts = EXCLUDED.projected_rushing_attempts,
-            projected_rushing_yards = EXCLUDED.projected_rushing_yards,
-            projected_rushing_tds = EXCLUDED.projected_rushing_tds,
-            projected_receptions = EXCLUDED.projected_receptions,
-            projected_receiving_yards = EXCLUDED.projected_receiving_yards,
-            projected_receiving_tds = EXCLUDED.projected_receiving_tds;
+        ON CONFLICT (player_name, normalized_name, position, opponent, stat_key) 
+        DO UPDATE SET
+            projection = EXCLUDED.projection;
     """
     
     try:
-        # Ensure projections contain the correct number of columns (11 columns)
-        for projection in projections:
-            if len(projection) != 11:
-                print(f"❌ Invalid projection length: {len(projection)} - Skipping this projection.")
-                continue  # Skip projections with incorrect length
-
         execute_values(cursor, query, projections)
     except Exception as e:
         print(f"❌ Error during projections insert: {e}")
@@ -172,14 +161,26 @@ def upload_player_projections(week):
         print(f"✅ Fetched {len(players)} players")  # Now we can safely use len()
 
         projections_dict = {}
+        
+        # Manual correction for mismatched team abbreviations
+        abbreviation_fixes = {
+            "JAX": "JAC"  # Map JAX (API) to JAC (database)
+        }
 
         for team_id, week, opponent_id in schedules:
             opponent_id = opponent_id.lstrip("@")  # Remove '@' from opponent_id
+            
+            # Apply team abbreviation fixes
+            corrected_team_id = abbreviation_fixes.get(team_id, team_id)
+            corrected_opponent_id = abbreviation_fixes.get(opponent_id, opponent_id)
 
             for player in players:
                 player_name, position_id, player_team, *player_averages = player
+                
+                # Apply team abbreviation fixes to player team
+                corrected_player_team = abbreviation_fixes.get(player_team, player_team)
 
-                if player_team != team_id:
+                if corrected_player_team != corrected_team_id:
                     continue  
 
                 # Debugging: Print player stats before calculating projection
@@ -190,7 +191,7 @@ def upload_player_projections(week):
                     print(f"⚠️ Skipping {player_name} due to incomplete stats.")
                     continue
 
-                defense_stats = get_defense_stats(cursor, opponent_id, position_id)
+                defense_stats = get_defense_stats(cursor, corrected_opponent_id, position_id)
                 league_averages = get_league_averages(cursor, position_id)
 
                 # Ensure that defense_stats and league_averages have the expected number of elements
@@ -212,22 +213,32 @@ def upload_player_projections(week):
                     print(f"⚠️ Mismatch in stats count for {player_name}. Skipping...")
                     continue
 
-                projection_values = [
-                    player_name, position_id, team_id, week, opponent_id
-                ]
+                # Create normalized name for database consistency
+                normalized_name = player_name.lower().replace(" ", "").replace(".", "").replace("'", "")
+                
+                # Define stat keys based on position
+                if position_id == 'QB':
+                    stat_keys = ['rushing_attempts', 'rushing_yards', 'rushing_tds', 'passing_attempts', 'passing_completions', 'passing_yards', 'passing_tds', 'interceptions']
+                else:
+                    stat_keys = ['rushing_attempts', 'rushing_yards', 'rushing_tds', 'receptions', 'receiving_yards', 'receiving_tds', 'targets']
 
-                # Calculate projections for each stat (up to the correct length for each position)
-                for i in range(min(len(player_averages), expected_length)):
-                    if player_averages[i] is not None:
-                        projection_values.append(
-                            calculate_projection(player_averages[i], defense_stats[i], league_averages[i])
+                # Calculate projections for each stat
+                for i, stat_key in enumerate(stat_keys):
+                    if i < len(player_averages) and player_averages[i] is not None:
+                        projection_value = calculate_projection(player_averages[i], defense_stats[i], league_averages[i])
+                        
+                        # Create individual projection row for each stat
+                        projection_row = (
+                            player_name,
+                            normalized_name,
+                            position_id,
+                            corrected_opponent_id,
+                            stat_key,
+                            projection_value
                         )
-                    else:
-                        # If any player average is missing, use None for the projection
-                        projection_values.append(None)
-
-                # Ensure only one entry per (player_name, week)
-                projections_dict[(player_name, week)] = tuple(projection_values)
+                        
+                        # Use (player_name, week, stat_key) as unique key
+                        projections_dict[(player_name, week, stat_key)] = projection_row
 
         projections = list(projections_dict.values())
 

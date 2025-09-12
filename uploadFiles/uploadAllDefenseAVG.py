@@ -1,3 +1,11 @@
+import psycopg2
+from psycopg2.extras import execute_values
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv('../my-app/.env')
+
 # Supabase connection details from .env
 SUPABASE_HOST = os.getenv("SUPABASE_HOST")
 SUPABASE_PORT = os.getenv("SUPABASE_PORT")

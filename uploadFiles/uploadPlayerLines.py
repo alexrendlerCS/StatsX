@@ -2,16 +2,18 @@ import psycopg2
 import csv
 from psycopg2.extras import execute_values
 from datetime import datetime, timezone
+import os
+from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+load_dotenv('../my-app/.env')
 
-# Get sensitive info from environment
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
+# Supabase credentials from env
+SUPABASE_HOST = os.getenv("SUPABASE_HOST")
+SUPABASE_PORT = os.getenv("SUPABASE_PORT")
+SUPABASE_DB = os.getenv("SUPABASE_DB")
+SUPABASE_USER = os.getenv("SUPABASE_USER")
+SUPABASE_PASSWORD = os.getenv("SUPABASE_PASSWORD")
 
 # Connect to Supabase database
 def connect_db():

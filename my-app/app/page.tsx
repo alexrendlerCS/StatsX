@@ -8,6 +8,7 @@ import Link from "next/link";
 import { BarChart3, TrendingUp, Users, Shield, Send } from "lucide-react";
 import { useState, useEffect } from "react";
 import supabase from "./supabaseClient";
+import DatabaseTest from "../components/DatabaseTest";
 
 export default function Home() {
   const [feedback, setFeedback] = useState(""); // For feedback input
@@ -24,8 +25,8 @@ export default function Home() {
   const [picksError, setPicksError] = useState(""); // For picks error message
   const [overUnder, setOverUnder] = useState(""); // Over/Under selection
   const [suggestions, setSuggestions] = useState([]); // Player name suggestions
-  const currentWeek = 17; // Current NFL Week (matchups)
-  const previousWeek = currentWeek - 1; // Previous Week (stats)
+  const currentWeek = 1; // Current NFL Week (matchups) - Updated for 2025 season
+  const previousWeek = currentWeek; // Use same week for 2025 season start
   const [allPlayersToWatch, setAllPlayersToWatch] = useState([]);
 
   const [performanceFilter, setPerformanceFilter] = useState<
@@ -66,42 +67,41 @@ export default function Home() {
     TE: [],
   });
 
-useEffect(() => {
-  const fetchWeeklyLeaders = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("weekly_leaders")
-        .select("week, player_name, position_id, stat_value, matchup, rank")
-        .eq("week", previousWeek);
+  useEffect(() => {
+    const fetchWeeklyLeaders = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("weekly_leaders")
+          .select("week, player_name, position_id, stat_value, matchup, rank")
+          .eq("week", previousWeek);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      const grouped = {
-        QB: [],
-        RB: [],
-        WR: [],
-        TE: [],
-      };
+        const grouped = {
+          QB: [],
+          RB: [],
+          WR: [],
+          TE: [],
+        };
 
-      data.forEach((row) => {
-        if (grouped[row.position_id]) {
-          grouped[row.position_id].push(row);
-        }
-      });
+        data.forEach((row) => {
+          if (grouped[row.position_id]) {
+            grouped[row.position_id].push(row);
+          }
+        });
 
-      Object.keys(grouped).forEach((pos) => {
-        grouped[pos] = grouped[pos].sort((a, b) => a.rank - b.rank);
-      });
+        Object.keys(grouped).forEach((pos) => {
+          grouped[pos] = grouped[pos].sort((a, b) => a.rank - b.rank);
+        });
 
-      setWeeklyLeaders(grouped);
-    } catch (err) {
-      console.error("Error fetching weekly leaders:", err.message);
-    }
-  };
+        setWeeklyLeaders(grouped);
+      } catch (err) {
+        console.error("Error fetching weekly leaders:", err.message);
+      }
+    };
 
-  fetchWeeklyLeaders();
-}, []);
-
+    fetchWeeklyLeaders();
+  }, []);
 
   const [hotPlayers, setHotPlayers] = useState([]);
   const [coldPlayers, setColdPlayers] = useState([]);
@@ -144,59 +144,60 @@ useEffect(() => {
     fetchHotAndColdPlayers();
   }, []);
 
- const fetchPlayersToWatch = async () => {
-   try {
-     const { data, error } = await supabase
-       .from("players_to_watch")
-       .select(
-         "player_name, position, stat_to_display, last_3_avg, season_avg, opponent, matchup_type, performance_type"
-       );
+  const fetchPlayersToWatch = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("players_to_watch")
+        .select(
+          "player_name, position, stat_to_display, last_3_avg, season_avg, opponent, matchup_type, performance_type"
+        );
 
-     if (error) throw error;
+      if (error) throw error;
 
-     console.log("Players to Watch Data:", data);
-     setAllPlayersToWatch(data); // Store full list once
-   } catch (error) {
-     console.error("Error fetching players to watch:", error.message);
-   }
- };
+      console.log("Players to Watch Data:", data);
+      setAllPlayersToWatch(data); // Store full list once
+    } catch (error) {
+      console.error("Error fetching players to watch:", error.message);
+    }
+  };
 
- // Run only once to fetch everything
- useEffect(() => {
-   fetchTeamNames();
-   fetchPlayersToWatch();
- }, []);
+  // Run only once to fetch everything
+  useEffect(() => {
+    fetchTeamNames();
+    fetchPlayersToWatch();
+  }, []);
 
- // Filter the players based on performanceFilter
- useEffect(() => {
-   if (!allPlayersToWatch || allPlayersToWatch.length === 0) return;
+  // Filter the players based on performanceFilter
+  useEffect(() => {
+    if (!allPlayersToWatch || allPlayersToWatch.length === 0) return;
 
-   const grouped = {
-     QB: [],
-     RB: [],
-     WR: [],
-     TE: [],
-   };
+    const grouped = {
+      QB: [],
+      RB: [],
+      WR: [],
+      TE: [],
+    };
 
-   allPlayersToWatch.forEach((player) => {
-     const posKey = player.position.toUpperCase();
+    allPlayersToWatch.forEach((player) => {
+      const posKey = player.position.toUpperCase();
 
-     if (
-       grouped[posKey] &&
-       (performanceFilter === "All" ||
-         player.performance_type === performanceFilter)
-     ) {
-       grouped[posKey].push(player);
-     }
-   });
+      if (
+        grouped[posKey] &&
+        (performanceFilter === "All" ||
+          player.performance_type === performanceFilter)
+      ) {
+        grouped[posKey].push(player);
+      }
+    });
 
-   Object.keys(grouped).forEach((position) => {
-     grouped[position] = grouped[position]
-       .sort((a, b) => b.last_3_avg - a.last_3_avg)
-   });
+    Object.keys(grouped).forEach((position) => {
+      grouped[position] = grouped[position].sort(
+        (a, b) => b.last_3_avg - a.last_3_avg
+      );
+    });
 
-   setPlayersToWatch(Object.values(grouped).flat());
- }, [performanceFilter, allPlayersToWatch]);
+    setPlayersToWatch(Object.values(grouped).flat());
+  }, [performanceFilter, allPlayersToWatch]);
 
   // Fetch Matchup Rankings from Supabase
   const fetchMatchupRankings = async () => {
@@ -418,6 +419,11 @@ useEffect(() => {
         </p>
       </section>
 
+      {/* Database Connection Test */}
+      <section>
+        <DatabaseTest />
+      </section>
+
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card className="bg-gray-800 border-blue-400 hover:border-blue-300 transition-colors">
           <CardHeader className="flex flex-row items-center space-x-2">
@@ -479,7 +485,7 @@ useEffect(() => {
           <Card className="bg-gray-800 border-blue-400">
             <CardHeader>
               <CardTitle className="text-blue-400 text-center">
-                Leaders for Week 17
+                Leaders for Week 1
               </CardTitle>
             </CardHeader>
             <CardContent>
