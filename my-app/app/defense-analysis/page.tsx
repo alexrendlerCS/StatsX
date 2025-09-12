@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { BarChart3, Shield } from "lucide-react";
 import supabase from "../supabaseClient";
-import { useState, useEffect } from "react"; // ✅ Keep this single import
+import { useState, useEffect, useCallback } from "react"; // ✅ Keep this single import
 
 export default function DefenseAnalysis() {
   const [selectedTeam, setSelectedTeam] = useState("");
@@ -201,20 +201,79 @@ export default function DefenseAnalysis() {
 
       // Function to get comparison color
       const getComparisonColor = (header, value, avgValue) => {
+        if (avgValue === 0) return "#d32f2f"; // Red for missing averages
+
+        const difference = value - avgValue;
+        const absDifference = Math.abs(difference);
+
+        // TOUCHDOWNS - Special handling
         if (header === "Passing TDs") {
-          if (value >= 2) return "#00c853"; // Green
-          if (value === 1) return "#ffea00"; // Yellow
-          if (value === 0) return "#d32f2f"; // Red
+          if (value >= 2) return "#00c853"; // Green - 2+ TDs
+          if (value === 1) return "#ffea00"; // Yellow - 1 TD
+          return "#d32f2f"; // Red - 0 TDs
         }
 
         if (header === "Rushing TDs" || header === "Receiving TDs") {
-          if (value >= 1) return "#00c853"; // Green
-          if (value === 0) return "#d32f2f"; // Red
+          if (value >= 1) return "#00c853"; // Green - 1+ TDs
+          return "#d32f2f"; // Red - 0 TDs
         }
 
-        if (avgValue === 0) return "#d32f2f"; // Red for missing averages
-        if (value > avgValue + 1.5) return "#00c853"; // Green for above average
-        if (Math.abs(value - avgValue) <= 1.5) return "#ffea00"; // Yellow
+        // INTERCEPTIONS - Special handling (lower is better)
+        if (header === "Interceptions") {
+          if (value === 0) return "#d32f2f"; // Red - 0 INTs (good for defense)
+          if (value === 1) return "#ffea00"; // Yellow - 1 INT
+          return "#00c853"; // Green - 2+ INTs (bad for offense, good for defense)
+        }
+
+        // YARDS - 10-20 range for yellow
+        if (
+          header === "Passing Yards" ||
+          header === "Rushing Yards" ||
+          header === "Total Receiving Yards" ||
+          header === "Total Rushing Yards"
+        ) {
+          if (absDifference <= 10) return "#ffea00"; // Yellow - within 10
+          if (absDifference <= 20) return "#ffea00"; // Yellow - within 20
+          if (difference > 20) return "#00c853"; // Green - above 20
+          return "#d32f2f"; // Red - below 20
+        }
+
+        // RATE - 10-20 range for yellow
+        if (header === "Rate") {
+          if (absDifference <= 10) return "#ffea00"; // Yellow - within 10
+          if (absDifference <= 20) return "#ffea00"; // Yellow - within 20
+          if (difference > 20) return "#00c853"; // Green - above 20
+          return "#d32f2f"; // Red - below 20
+        }
+
+        // ATTEMPTS/COMPLETIONS/TARGETS/RECEPTIONS - 1-2 range for yellow
+        if (
+          header === "Passing Attempts" ||
+          header === "Completions" ||
+          header === "Rushing Attempts" ||
+          header === "Targets" ||
+          header === "Receptions"
+        ) {
+          if (absDifference <= 1) return "#ffea00"; // Yellow - within 1
+          if (absDifference <= 2) return "#ffea00"; // Yellow - within 2
+          if (difference > 2) return "#00c853"; // Green - above 2
+          return "#d32f2f"; // Red - below 2
+        }
+
+        // AVERAGE YARDS - 1-2 range for yellow
+        if (
+          header === "Avg Yards per Carry" ||
+          header === "Avg Yards per Catch"
+        ) {
+          if (absDifference <= 1) return "#ffea00"; // Yellow - within 1
+          if (absDifference <= 2) return "#ffea00"; // Yellow - within 2
+          if (difference > 2) return "#00c853"; // Green - above 2
+          return "#d32f2f"; // Red - below 2
+        }
+
+        // Default fallback
+        if (difference > 1.5) return "#00c853"; // Green for above average
+        if (absDifference <= 1.5) return "#ffea00"; // Yellow
         return "#d32f2f"; // Red for below average
       };
 
@@ -247,13 +306,36 @@ export default function DefenseAnalysis() {
               dbKey = "rushing_yards";
             } else if (
               selectedPosition === "QB" &&
+              dbKey === "rushing_attempts"
+            ) {
+              dbKey = "rushing_attempts"; // QB uses same field name for team stats
+            } else if (
+              selectedPosition === "QB" &&
               dbKey === "avg_yards_per_carry"
             ) {
-              dbKey = "avg_qb_avg_rushing_yards";
+              dbKey = "avg_rushing_yards"; // QB uses same field name for team stats
             }
 
             const value = weekStats[0][dbKey] ?? "N/A";
-            const avgValue = leagueAverages[`avg_${dbKey}`] ?? 0;
+
+            // For QB, use QB-specific field names for league averages
+            let avgFieldName;
+            if (
+              selectedPosition === "QB" &&
+              (dbKey === "rushing_attempts" ||
+                dbKey === "rushing_yards" ||
+                dbKey === "avg_rushing_yards")
+            ) {
+              avgFieldName = `avg_qb_${dbKey}`;
+            } else if (dbKey === "total_rushing_yards") {
+              avgFieldName = "avg_rushing_yards"; // Database has avg_rushing_yards, not avg_total_rushing_yards
+            } else if (dbKey === "total_receiving_yards") {
+              avgFieldName = "avg_receiving_yards"; // Database has avg_receiving_yards, not avg_total_receiving_yards
+            } else {
+              avgFieldName = `avg_${dbKey}`;
+            }
+
+            const avgValue = leagueAverages[avgFieldName] ?? 0;
 
             if (!valuesForAverages[header]) valuesForAverages[header] = [];
             if (value !== "N/A") valuesForAverages[header].push(Number(value));
@@ -326,7 +408,7 @@ export default function DefenseAnalysis() {
                 playerStatKey =
                   header === "Rushing Yards"
                     ? "rushing_yards"
-                    : "avg_qb_avg_rushing_yards";
+                    : "avg_rushing_yards"; // Fixed: was avg_qb_avg_rushing_yards
               }
 
               const playerValue = player[playerStatKey] ?? "N/A";
@@ -373,8 +455,55 @@ export default function DefenseAnalysis() {
               ? sum / Math.min(values[header].length, 3)
               : sum / values[header].length;
 
+          // Get the league average for comparison
+          let dbKey = headerToDbKeyTeam[header];
+          if (!dbKey) {
+            averageRow[header] = "N/A";
+            return;
+          }
+
+          if (selectedPosition === "QB" && dbKey === "total_rushing_yards") {
+            dbKey = "rushing_yards";
+          } else if (
+            selectedPosition === "QB" &&
+            dbKey === "rushing_attempts"
+          ) {
+            dbKey = "rushing_attempts";
+          } else if (
+            selectedPosition === "QB" &&
+            dbKey === "avg_yards_per_carry"
+          ) {
+            dbKey = "avg_rushing_yards";
+          }
+
+          // For QB, use QB-specific field names for league averages
+          let avgFieldName;
+          if (
+            selectedPosition === "QB" &&
+            (dbKey === "rushing_attempts" ||
+              dbKey === "rushing_yards" ||
+              dbKey === "avg_rushing_yards")
+          ) {
+            avgFieldName = `avg_qb_${dbKey}`;
+          } else if (dbKey === "total_rushing_yards") {
+            avgFieldName = "avg_rushing_yards"; // League averages table has avg_rushing_yards, not avg_total_rushing_yards
+          } else if (dbKey === "total_receiving_yards") {
+            avgFieldName = "avg_receiving_yards"; // League averages table has avg_receiving_yards, not avg_total_receiving_yards
+          } else {
+            avgFieldName = `avg_${dbKey}`;
+          }
+
+          const leagueAvgValue = leagueAverages[avgFieldName] ?? 0;
+
           averageRow[header] = (
-            <span style={{ fontWeight: "bold" }}>{average.toFixed(2)}</span>
+            <span
+              style={{
+                color: getComparisonColor(header, average, leagueAvgValue),
+                fontWeight: "bold",
+              }}
+            >
+              {average.toFixed(2)}
+            </span>
           );
         });
         rows.push(averageRow);
@@ -382,6 +511,93 @@ export default function DefenseAnalysis() {
 
       addAverageRows(valuesForAverages, "L3 Average");
       addAverageRows(valuesForAverages, "Overall Average");
+
+      // Add League Average row
+      const addLeagueAverageRow = () => {
+        const leagueAverageRow = {
+          Week: "",
+          Matchup: "League Average",
+          rowType: "leagueAverage",
+        };
+
+        headers.slice(2).forEach((header) => {
+          let dbKey = headerToDbKeyTeam[header];
+          if (!dbKey) {
+            leagueAverageRow[header] = "N/A";
+            return;
+          }
+
+          if (selectedPosition === "QB" && dbKey === "total_rushing_yards") {
+            dbKey = "rushing_yards";
+          } else if (
+            selectedPosition === "QB" &&
+            dbKey === "rushing_attempts"
+          ) {
+            dbKey = "qb_rushing_attempts"; // QB-specific field name
+          } else if (
+            selectedPosition === "QB" &&
+            dbKey === "avg_yards_per_carry"
+          ) {
+            dbKey = "qb_avg_rushing_yards"; // QB-specific field name
+          }
+
+          // For QB, use QB-specific field names for league averages
+          let avgFieldName;
+          if (
+            selectedPosition === "QB" &&
+            (dbKey === "qb_rushing_attempts" ||
+              dbKey === "rushing_yards" ||
+              dbKey === "qb_avg_rushing_yards")
+          ) {
+            avgFieldName = `avg_${dbKey}`;
+          } else if (dbKey === "total_rushing_yards") {
+            avgFieldName = "avg_rushing_yards"; // League averages table has avg_rushing_yards, not avg_total_rushing_yards
+          } else if (dbKey === "total_receiving_yards") {
+            avgFieldName = "avg_receiving_yards"; // League averages table has avg_receiving_yards, not avg_total_receiving_yards
+          } else {
+            avgFieldName = `avg_${dbKey}`;
+          }
+
+          const avgValue = leagueAverages[avgFieldName] ?? 0;
+
+          // Set Avg Yards per Carry and Avg Yards per Catch to N/A for league average
+          if (
+            header === "Avg Yards per Carry" ||
+            header === "Avg Yards per Catch"
+          ) {
+            leagueAverageRow[header] = (
+              <span
+                style={{
+                  fontWeight: "bold",
+                  color: "#60a5fa", // Blue color for league average
+                  backgroundColor: "#1e3a8a", // Dark blue background
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                }}
+              >
+                N/A
+              </span>
+            );
+          } else {
+            leagueAverageRow[header] = (
+              <span
+                style={{
+                  fontWeight: "bold",
+                  color: "#60a5fa", // Blue color for league average
+                  backgroundColor: "#1e3a8a", // Dark blue background
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                }}
+              >
+                {avgValue.toFixed(2)}
+              </span>
+            );
+          }
+        });
+        rows.push(leagueAverageRow);
+      };
+
+      addLeagueAverageRow();
 
       setTableRows(rows); // Update table rows with processed data
     } catch (error) {
@@ -428,10 +644,9 @@ export default function DefenseAnalysis() {
   };
 
   // Fetch Defensive Rankings for Selected Position
-  const fetchRankings = async () => {
+  const fetchRankings = useCallback(async () => {
     try {
       setRankings([]); // ✅ Clear old rankings before fetching new ones
-
 
       const leagueTable =
         selectedPosition === "QB"
@@ -496,12 +711,12 @@ export default function DefenseAnalysis() {
     } catch (error) {
       console.error("Error fetching rankings:", error.message);
     }
-  };
+  }, [selectedPosition]);
 
   useEffect(() => {
     fetchTeamNames();
     fetchRankings();
-  }, [selectedPosition]);
+  }, [selectedPosition, fetchRankings]);
 
   return (
     <div className="flex-grow">
@@ -542,81 +757,108 @@ export default function DefenseAnalysis() {
 
             {/* Rankings Table */}
             {/* Rankings Table */}
-<div>
-  <table className="w-full text-sm text-gray-300">
-    <thead className="text-xs uppercase bg-gray-700 text-gray-400">
-      <tr>
-        <th className="px-6 py-3">Rank</th>
-        <th className="px-6 py-3">Team</th>
-        <th className="px-6 py-3">Avg Allowed</th>
-        <th className="px-6 py-3">Above/Below Avg</th>
-      </tr>
-    </thead>
-    <tbody>
-      {currentTeams.map((defense, index) => {
-        // Determine color for "Avg Allowed"
-        const avgAllowedColor =
-          defense.avg_stat >= leagueAvg + 20
-            ? "text-green-400" // 🟢 High Yards Allowed (Weak Defense)
-            : defense.avg_stat < leagueAvg - 10
-            ? "text-red-400" // 🔴 Low Yards Allowed (Strong Defense)
-            : "text-yellow-400"; // 🟡 Around League Avg
+            <div>
+              <table className="w-full text-sm text-gray-300">
+                <thead className="text-xs uppercase bg-gray-700 text-gray-400">
+                  <tr>
+                    <th className="px-6 py-3">Rank</th>
+                    <th className="px-6 py-3">Team</th>
+                    <th className="px-6 py-3">Avg Allowed</th>
+                    <th className="px-6 py-3">Above/Below Avg</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* League Average Row */}
+                  <tr className="bg-blue-900 border-b-2 border-blue-400">
+                    <td className="px-6 py-4 font-bold text-blue-200">—</td>
+                    <td className="px-6 py-4 font-bold text-blue-200">
+                      League Average
+                    </td>
+                    <td className="px-6 py-4 font-bold text-blue-200">
+                      {parseFloat(leagueAvg).toFixed(1)}
+                    </td>
+                    <td className="px-6 py-4 text-sm italic text-blue-200">
+                      ±0.0
+                    </td>
+                  </tr>
 
-        // Determine color for "Above/Below Avg"
-        const aboveBelowColor =
-          defense.yards_above_avg >= 10
-            ? "text-green-300" // 🟢 Above League Avg by 10+
-            : defense.yards_above_avg <= -10
-            ? "text-red-400" // 🔴 Below League Avg by 10+
-            : "text-yellow-300"; // 🟡 Within ±10 yards of league avg
+                  {currentTeams.map((defense, index) => {
+                    // Determine color for "Avg Allowed"
+                    const avgAllowedColor =
+                      defense.avg_stat >= leagueAvg + 20
+                        ? "text-green-400" // 🟢 High Yards Allowed (Weak Defense)
+                        : defense.avg_stat < leagueAvg - 10
+                        ? "text-red-400" // 🔴 Low Yards Allowed (Strong Defense)
+                        : "text-yellow-400"; // 🟡 Around League Avg
 
-        return (
-          <tr key={index} className="bg-gray-800 border-b border-gray-700">
-            {/* Rank */}
-            <td className="px-6 py-4 font-bold">{defense.rank}</td>
+                    // Determine color for "Above/Below Avg"
+                    const aboveBelowColor =
+                      defense.yards_above_avg >= 10
+                        ? "text-green-300" // 🟢 Above League Avg by 10+
+                        : defense.yards_above_avg <= -10
+                        ? "text-red-400" // 🔴 Below League Avg by 10+
+                        : "text-yellow-300"; // 🟡 Within ±10 yards of league avg
 
-            {/* Team */}
-            <td className="px-6 py-4">{teamNames[defense.team_id] || defense.team_id}</td>
+                    return (
+                      <tr
+                        key={index}
+                        className="bg-gray-800 border-b border-gray-700"
+                      >
+                        {/* Rank */}
+                        <td className="px-6 py-4 font-bold">{defense.rank}</td>
 
-            {/* Avg Allowed - Colorized Based on Performance */}
-            <td className={`px-6 py-4 font-bold ${avgAllowedColor}`}>
-              {parseFloat(defense.avg_stat).toFixed(1)}
-            </td>
+                        {/* Team */}
+                        <td className="px-6 py-4">
+                          {teamNames[defense.team_id] || defense.team_id}
+                        </td>
 
-            {/* Above/Below Avg - Colorized Based on Comparison */}
-            <td className={`px-6 py-4 text-sm italic ${aboveBelowColor}`}>
-              {defense.yards_above_avg >= 0
-                ? `+${parseFloat(defense.yards_above_avg).toFixed(1)}`
-                : parseFloat(defense.yards_above_avg).toFixed(1)}
-            </td>
-          </tr>
-        );
-      })}
-    </tbody>
-  </table>
+                        {/* Avg Allowed - Colorized Based on Performance */}
+                        <td
+                          className={`px-6 py-4 font-bold ${avgAllowedColor}`}
+                        >
+                          {parseFloat(defense.avg_stat).toFixed(1)}
+                        </td>
 
-  {/* Pagination Controls */}
-  <div className="flex justify-center mt-4">
-    <button
-      onClick={prevPage}
-      disabled={currentPage === 1}
-      className="px-3 py-2 bg-gray-600 rounded-l"
-    >
-      ◀ Prev
-    </button>
-    <span className="px-4 py-2 bg-gray-700 text-gray-200">
-      Page {currentPage} of {Math.ceil(rankings.length / teamsPerPage)}
-    </span>
-    <button
-      onClick={nextPage}
-      disabled={currentPage === Math.ceil(rankings.length / teamsPerPage)}
-      className="px-3 py-2 bg-gray-600 rounded-r"
-    >
-      Next ▶
-    </button>
-  </div>
-</div>
+                        {/* Above/Below Avg - Colorized Based on Comparison */}
+                        <td
+                          className={`px-6 py-4 text-sm italic ${aboveBelowColor}`}
+                        >
+                          {defense.yards_above_avg >= 0
+                            ? `+${parseFloat(defense.yards_above_avg).toFixed(
+                                1
+                              )}`
+                            : parseFloat(defense.yards_above_avg).toFixed(1)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
 
+              {/* Pagination Controls */}
+              <div className="flex justify-center mt-4">
+                <button
+                  onClick={prevPage}
+                  disabled={currentPage === 1}
+                  className="px-3 py-2 bg-gray-600 rounded-l"
+                >
+                  ◀ Prev
+                </button>
+                <span className="px-4 py-2 bg-gray-700 text-gray-200">
+                  Page {currentPage} of{" "}
+                  {Math.ceil(rankings.length / teamsPerPage)}
+                </span>
+                <button
+                  onClick={nextPage}
+                  disabled={
+                    currentPage === Math.ceil(rankings.length / teamsPerPage)
+                  }
+                  className="px-3 py-2 bg-gray-600 rounded-r"
+                >
+                  Next ▶
+                </button>
+              </div>
+            </div>
           </CardContent>
         </Card>
         <Card className="bg-gray-800 border-blue-400">
@@ -732,6 +974,8 @@ export default function DefenseAnalysis() {
                           } ${
                             row.rowType === "child"
                               ? "bg-gray-900"
+                              : row.rowType === "leagueAverage"
+                              ? "bg-blue-900 border-b-2 border-blue-400"
                               : "bg-gray-800"
                           } border-gray-700`}
                           onClick={() =>
@@ -747,6 +991,10 @@ export default function DefenseAnalysis() {
                               key={header}
                               className={`px-6 py-4 ${
                                 row.rowType === "child" ? "pl-12 text-left" : ""
+                              } ${
+                                row.rowType === "leagueAverage"
+                                  ? "text-blue-200 font-bold"
+                                  : ""
                               }`}
                             >
                               {row[header] !== undefined ? row[header] : "N/A"}

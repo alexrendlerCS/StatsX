@@ -68,4 +68,4 @@ def generate_weekly_leaders(week):
     print(f"Inserted top players for week {week}.")
 
 if __name__ == "__main__":
-    generate_weekly_leaders(week=16)  # Replace 16 with your target week
+    generate_weekly_leaders(week=1)  # Replace 16 with your target week

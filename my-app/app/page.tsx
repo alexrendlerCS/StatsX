@@ -8,7 +8,6 @@ import Link from "next/link";
 import { BarChart3, TrendingUp, Users, Shield, Send } from "lucide-react";
 import { useState, useEffect } from "react";
 import supabase from "./supabaseClient";
-import DatabaseTest from "../components/DatabaseTest";
 
 export default function Home() {
   const [feedback, setFeedback] = useState(""); // For feedback input
@@ -101,7 +100,7 @@ export default function Home() {
     };
 
     fetchWeeklyLeaders();
-  }, []);
+  }, [previousWeek]);
 
   const [hotPlayers, setHotPlayers] = useState([]);
   const [coldPlayers, setColdPlayers] = useState([]);
@@ -417,11 +416,6 @@ export default function Home() {
         <p className="text-xl text-gray-300">
           Your ultimate NFL statistics analysis platform
         </p>
-      </section>
-
-      {/* Database Connection Test */}
-      <section>
-        <DatabaseTest />
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
