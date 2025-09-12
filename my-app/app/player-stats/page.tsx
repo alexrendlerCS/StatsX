@@ -118,32 +118,13 @@ export default function PlayerStats() {
     return normalized;
   };
 
-  const generateNameVariations = (playerName) => {
-    const variations = [playerName];
-    const normalized = normalizeNameForMatching(playerName);
-
-    // Add variations with Sr, Jr, III, etc.
-    const suffixes = [" Sr", " Jr", " III", " IV", " V"];
-
-    // Add the normalized name if different from original
-    if (normalized !== playerName) {
-      variations.push(normalized);
-    }
-
-    // Add variations with suffixes
-    suffixes.forEach((suffix) => {
-      variations.push(normalized + suffix);
-    });
-
-    return [...new Set(variations)]; // Remove duplicates
-  };
 
   const fetchPlayerAverages = async (playerName) => {
     try {
       console.log("Fetching averages for player:", playerName);
 
       // First try exact match
-      let { data: playerAverages, error } = await supabase
+      const { data: initialAverages, error } = await supabase
         .from("player_averages")
         .select("*")
         .eq("player_name", playerName);
@@ -152,6 +133,8 @@ export default function PlayerStats() {
         console.error("Error fetching player averages:", error.message);
         throw new Error("Failed to fetch player averages.");
       }
+
+      let playerAverages = initialAverages;
 
       // If no exact match, try normalized matching
       if (!playerAverages || playerAverages.length === 0) {
@@ -227,7 +210,7 @@ export default function PlayerStats() {
       setAverages(averagesMap);
 
       // First try exact match for weekly stats
-      let { data: weeklyStats, error: statsError } = await supabase
+      const { data: initialWeeklyStats, error: statsError } = await supabase
         .from("player_stats")
         .select("*")
         .eq("player_name", playerName);
@@ -236,6 +219,8 @@ export default function PlayerStats() {
         console.error("Error fetching weekly stats:", statsError.message);
         throw new Error("Failed to fetch player stats.");
       }
+
+      let weeklyStats = initialWeeklyStats;
 
       // If no exact match, try normalized matching
       if (!weeklyStats || weeklyStats.length === 0) {
