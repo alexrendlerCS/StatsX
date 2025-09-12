@@ -775,7 +775,7 @@ export default function DefenseAnalysis() {
                       League Average
                     </td>
                     <td className="px-6 py-4 font-bold text-blue-200">
-                      {parseFloat(leagueAvg).toFixed(1)}
+                      {leagueAvg.toFixed(1)}
                     </td>
                     <td className="px-6 py-4 text-sm italic text-blue-200">
                       ±0.0
