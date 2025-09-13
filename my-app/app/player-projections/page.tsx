@@ -539,62 +539,58 @@ useEffect(() => {
       : placeholderData;
 
   return (
-    <div className="flex-grow">
-      <div className="space-y-8">
-        {/* Header */}
-        <div className="flex items-center justify-center space-x-2">
-          <BarChart3 className="w-8 h-8 text-blue-400" />
-          <h1 className="text-4xl font-bold text-center text-blue-400">
+    <div className="min-h-screen bg-gray-900 text-gray-100">
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8 text-center">
+          <h1 className="text-4xl font-bold text-blue-400 mb-2 flex items-center justify-center">
+            <BarChart3 className="w-10 h-10 mr-3" />
             Player Projections
           </h1>
+          <p className="text-gray-400 text-lg">
+            View player projections and performance analysis
+          </p>
         </div>
 
-        {/* Search Card */}
-        <div className="flex justify-center">
-          <Card className="bg-gray-800 border-blue-400 w-full max-w-md">
+        {/* Search Section */}
+        <div className="flex justify-center mb-8">
+          <Card className="w-full max-w-lg bg-gray-800 border-gray-700">
             <CardHeader>
-              <CardTitle className="text-blue-400 flex items-center space-x-2">
-                <BarChart3 className="w-6 h-6" />
-                <span>Find Player</span>
+              <CardTitle className="text-xl text-blue-400 flex items-center">
+                <BarChart3 className="w-6 h-6 mr-2" />
+                Player Search
               </CardTitle>
             </CardHeader>
 
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Player Name Input */}
                 <div className="relative">
-                  <label className="block text-sm font-medium text-gray-400 mb-2">
-                    Player Name
-                  </label>
                   <Input
                     type="text"
-                    placeholder="Enter player name"
+                    placeholder="Enter player name..."
                     value={playerName}
                     onChange={(e) => {
                       setPlayerName(e.target.value);
                       fetchSuggestions(e.target.value);
                     }}
-                    className="bg-gray-700 text-gray-100 border-gray-600 w-full"
+                    className="bg-gray-700 border-gray-600 text-gray-100"
                   />
                   {suggestions.length > 0 && (
-                    <ul className="absolute z-10 bg-gray-700 border border-gray-600 w-full mt-1 rounded shadow-lg">
-                      {suggestions.map((suggestion, index) => (
-                        <li
+                    <div className="absolute z-10 mt-1 left-0 right-0 bg-gray-700 border border-gray-600 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                      {suggestions.slice(0, 5).map((suggestion, index) => (
+                        <div
                           key={index}
+                          className="px-4 py-2 hover:bg-gray-600 cursor-pointer text-gray-100"
                           onClick={() => {
                             setPlayerName(suggestion);
                             setSuggestions([]);
                           }}
-                          className="px-4 py-2 text-gray-100 cursor-pointer hover:bg-gray-600"
                         >
                           {suggestion}
-                        </li>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   )}
                 </div>
-
-                {/* Submit Button */}
                 <Button
                   type="submit"
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white"
