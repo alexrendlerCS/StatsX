@@ -118,7 +118,6 @@ export default function PlayerStats() {
     return normalized;
   };
 
-
   const fetchPlayerAverages = async (playerName) => {
     try {
       console.log("Fetching averages for player:", playerName);

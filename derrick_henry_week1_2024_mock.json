@@ -1,0 +1,22 @@
+{
+  "player_name": "Derrick Henry",
+  "team": "BAL",
+  "week": 1,
+  "season": 2024,
+  "game_date": "2024-09-08",
+  "opponent": "KC",
+  "rushing_attempts": 15,
+  "rushing_yards": 78,
+  "rushing_tds": 1,
+  "receptions": 2,
+  "receiving_yards": 12,
+  "receiving_tds": 0,
+  "targets": 3,
+  "fumbles": 0,
+  "fantasy_points_ppr": 15.0,
+  "fantasy_points_standard": 13.0,
+  "snap_percentage": 65.0,
+  "target_share": 8.5,
+  "air_yards": 5,
+  "yards_after_catch": 7
+}
