@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import Papa from "papaparse";
 import supabase from "../supabaseClient";
 
-
 // Import chart components from recharts
 import {
   LineChart,
@@ -29,11 +28,10 @@ export default function PlayerProjections() {
   const [customValue, setCustomValue] = useState(null); // User-defined line value
   const [weeklyStats, setWeeklyStats] = useState([]); // Weekly stats for the player
   const [fetchTriggered, setFetchTriggered] = useState(false); // Tracks whether projections should be fetched
-   // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [error, setError] = useState<string | null>(null); // Error state
   const [topPicks, setTopPicks] = useState([]);
 
-    
   // Utility function to normalize strings
   const normalizeString = (str) =>
     str
@@ -41,7 +39,7 @@ export default function PlayerProjections() {
       .replace(/[-.`'’]/g, "")
       .replace(/\s+/g, " ")
       .trim();
-  
+
   const normalizedPlayerName = normalizeString(playerName);
 
   const relevantStats = {
@@ -83,162 +81,160 @@ export default function PlayerProjections() {
       { label: "Rushing TDs", key: "rushing_tds" },
     ],
   };
-  
-interface Player {
-  id: number;
-  player_name: string;
-  position: string;
-  normalized_name: string;
-  opponent: string;
-  stat_to_display: string;
-  last_3_avg: number;
-  season_avg: number;
-  matchup_type: string;
-  performance_type: string;
-}
 
-interface EnrichedPlayer extends Player {
-  performance_gap: number;
-}
+  interface Player {
+    id: number;
+    player_name: string;
+    position: string;
+    normalized_name: string;
+    opponent: string;
+    stat_to_display: string;
+    last_3_avg: number;
+    season_avg: number;
+    matchup_type: string;
+    performance_type: string;
+  }
 
-useEffect(() => {
-  const fetchTopPicks = async () => {
-    const normalizeStringFrontend = (str: string) =>
-      str
-        .toLowerCase()
-        .replace(/[-.`'’]/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
+  interface EnrichedPlayer extends Player {
+    performance_gap: number;
+  }
 
-    const { data, error } = await supabase.from("players_to_watch").select("*");
+  useEffect(() => {
+    const fetchTopPicks = async () => {
+      const normalizeStringFrontend = (str: string) =>
+        str
+          .toLowerCase()
+          .replace(/[-.`'’]/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
 
-    if (error) {
-      console.error("❌ Error fetching top picks:", error.message);
-      return;
-    }
+      const { data, error } = await supabase
+        .from("players_to_watch")
+        .select("*");
 
-    if (data) {
-      console.log("✅ players_to_watch:", data);
-
-      // Step 1: Compute performance gap
-      const enrichedData = data.map((player) => ({
-        ...player,
-        performance_gap: Math.abs(
-          (player.last_3_avg || 0) - (player.season_avg || 0)
-        ),
-      }));
-
-      // Step 2: Group players by position
-      const groupedByPosition: Record<string, EnrichedPlayer[]> = {};
-  
-
-
-
-      enrichedData.forEach((player) => {
-        if (!groupedByPosition[player.position]) {
-          groupedByPosition[player.position] = [];
-        }
-        groupedByPosition[player.position].push(player);
-      });
-
-      // Step 3: Sort within each position and pick top 2
-      const topPlayers: EnrichedPlayer[] = [];
-      ["QB", "RB", "WR", "TE"].forEach((position) => {
-        const players = groupedByPosition[position] || [];
-        const topTwo = players
-          .sort((a, b) => b.performance_gap - a.performance_gap)
-          .slice(0, 2);
-        topPlayers.push(...topTwo);
-      });
-
-      console.log(
-        "✅ Top players by position:",
-        topPlayers.map((p) => p.player_name)
-      );
-
-      // Step 4: Fetch projections
-      const projectionQuery = await supabase
-        .from("player_projections")
-        .select("normalized_name, opponent, stat_key, projection");
-
-      if (projectionQuery.error) {
-        console.error(
-          "❌ Error fetching projections:",
-          projectionQuery.error.message
-        );
+      if (error) {
+        console.error("❌ Error fetching top picks:", error.message);
         return;
       }
 
-      const projectionsMap: Record<string, Record<string, number>> = {};
-      projectionQuery.data.forEach((row) => {
-        const key = `${normalizeStringFrontend(
-          row.normalized_name
-        )}_${row.opponent.toLowerCase()}`;
-        if (!projectionsMap[key]) {
-          projectionsMap[key] = {};
-        }
-        projectionsMap[key][row.stat_key] = row.projection;
-      });
+      if (data) {
+        console.log("✅ players_to_watch:", data);
 
-      // Step 5: Map stat display label to database key
-      const mapStatToProjection = (label: string) => {
-        const mapping = {
-          "Passing Attempts": "passing_attempts",
-          Completions: "completions",
-          "Passing Yards": "passing_yards",
-          "Passing TDs": "passing_tds",
-          Interceptions: "interceptions",
-          "Rushing Attempts": "rushing_attempts",
-          "Rushing Yards": "rushing_yards",
-          "Rushing TDs": "rushing_tds",
-          Targets: "targets",
-          Receptions: "receptions",
-          "Receiving Yards": "receiving_yards",
-          "Receiving TDs": "receiving_tds",
-        };
-        return mapping[label.trim()] || label.toLowerCase();
-      };
-
-      // Step 6: Enrich players with projections
-      const enriched = topPlayers.map((player) => {
-        const statKey = mapStatToProjection(player.stat_to_display);
-        const normName = normalizeStringFrontend(player.normalized_name);
-        const opponent = player.opponent
-          ? player.opponent.toLowerCase().trim()
-          : "";
-
-        const composedKey = `${normName}_${opponent}`;
-        let playerProjections = projectionsMap[composedKey];
-
-        if (!playerProjections) {
-          console.warn(
-            `❌ No projections found for ${normName} vs ${opponent}`
-          );
-          const fallbackKey = Object.keys(projectionsMap).find((k) =>
-            k.startsWith(normName)
-          );
-          if (fallbackKey) {
-            playerProjections = projectionsMap[fallbackKey];
-          }
-        }
-
-        const projectionValue = playerProjections?.[statKey];
-
-        return {
+        // Step 1: Compute performance gap
+        const enrichedData = data.map((player) => ({
           ...player,
-          projection: projectionValue ?? "N/A",
+          performance_gap: Math.abs(
+            (player.last_3_avg || 0) - (player.season_avg || 0)
+          ),
+        }));
+
+        // Step 2: Group players by position
+        const groupedByPosition: Record<string, EnrichedPlayer[]> = {};
+
+        enrichedData.forEach((player) => {
+          if (!groupedByPosition[player.position]) {
+            groupedByPosition[player.position] = [];
+          }
+          groupedByPosition[player.position].push(player);
+        });
+
+        // Step 3: Sort within each position and pick top 2
+        const topPlayers: EnrichedPlayer[] = [];
+        ["QB", "RB", "WR", "TE"].forEach((position) => {
+          const players = groupedByPosition[position] || [];
+          const topTwo = players
+            .sort((a, b) => b.performance_gap - a.performance_gap)
+            .slice(0, 2);
+          topPlayers.push(...topTwo);
+        });
+
+        console.log(
+          "✅ Top players by position:",
+          topPlayers.map((p) => p.player_name)
+        );
+
+        // Step 4: Fetch projections
+        const projectionQuery = await supabase
+          .from("player_projections")
+          .select("normalized_name, opponent, stat_key, projection");
+
+        if (projectionQuery.error) {
+          console.error(
+            "❌ Error fetching projections:",
+            projectionQuery.error.message
+          );
+          return;
+        }
+
+        const projectionsMap: Record<string, Record<string, number>> = {};
+        projectionQuery.data.forEach((row) => {
+          const key = `${normalizeStringFrontend(
+            row.normalized_name
+          )}_${row.opponent.toLowerCase()}`;
+          if (!projectionsMap[key]) {
+            projectionsMap[key] = {};
+          }
+          projectionsMap[key][row.stat_key] = row.projection;
+        });
+
+        // Step 5: Map stat display label to database key
+        const mapStatToProjection = (label: string) => {
+          const mapping = {
+            "Passing Attempts": "passing_attempts",
+            Completions: "completions",
+            "Passing Yards": "passing_yards",
+            "Passing TDs": "passing_tds",
+            Interceptions: "interceptions",
+            "Rushing Attempts": "rushing_attempts",
+            "Rushing Yards": "rushing_yards",
+            "Rushing TDs": "rushing_tds",
+            Targets: "targets",
+            Receptions: "receptions",
+            "Receiving Yards": "receiving_yards",
+            "Receiving TDs": "receiving_tds",
+          };
+          return mapping[label.trim()] || label.toLowerCase();
         };
-      });
 
-      console.log("✅ Final enriched top picks:", enriched);
+        // Step 6: Enrich players with projections
+        const enriched = topPlayers.map((player) => {
+          const statKey = mapStatToProjection(player.stat_to_display);
+          const normName = normalizeStringFrontend(player.normalized_name);
+          const opponent = player.opponent
+            ? player.opponent.toLowerCase().trim()
+            : "";
 
-      setTopPicks(enriched);
-    }
-  };
+          const composedKey = `${normName}_${opponent}`;
+          let playerProjections = projectionsMap[composedKey];
 
-  fetchTopPicks();
-}, []);
+          if (!playerProjections) {
+            console.warn(
+              `❌ No projections found for ${normName} vs ${opponent}`
+            );
+            const fallbackKey = Object.keys(projectionsMap).find((k) =>
+              k.startsWith(normName)
+            );
+            if (fallbackKey) {
+              playerProjections = projectionsMap[fallbackKey];
+            }
+          }
 
+          const projectionValue = playerProjections?.[statKey];
+
+          return {
+            ...player,
+            projection: projectionValue ?? "N/A",
+          };
+        });
+
+        console.log("✅ Final enriched top picks:", enriched);
+
+        setTopPicks(enriched);
+      }
+    };
+
+    fetchTopPicks();
+  }, []);
 
   useEffect(() => {
     if (fetchTriggered && playerName.trim()) {
@@ -273,7 +269,6 @@ useEffect(() => {
       fetchWeeklyStats();
     }
   }, [fetchTriggered, playerName]);
-
 
   // Fetch player name suggestions
   const fetchSuggestions = async (query) => {
@@ -311,28 +306,34 @@ useEffect(() => {
       try {
         const response = await fetch("/PlayerProps.csv");
         const csvText = await response.text();
-  
+
         Papa.parse(csvText, {
           header: true,
           skipEmptyLines: true,
           complete: (result) => {
             const lines = {};
-  
+
             result.data.forEach((row) => {
               const originalPlayerName = row.description;
               const normalizedPlayerName = normalizeString(originalPlayerName); // Normalize name
               const statKey = row.market.trim();
               const lineValue = row.point || "N/A";
-  
+
               // Debugging output
-              console.log(`Original: "${originalPlayerName}" -> Normalized: "${normalizedPlayerName}"`);
-  
+              console.log(
+                `Original: "${originalPlayerName}" -> Normalized: "${normalizedPlayerName}"`
+              );
+
               // Store values in normalized structure
-              if (!lines[normalizedPlayerName]) lines[normalizedPlayerName] = {};
+              if (!lines[normalizedPlayerName])
+                lines[normalizedPlayerName] = {};
               lines[normalizedPlayerName][statKey] = lineValue;
             });
-  
-            console.log("Parsed Lines with Normalized Keys:", Object.keys(lines));
+
+            console.log(
+              "Parsed Lines with Normalized Keys:",
+              Object.keys(lines)
+            );
             setPlayerLines(lines);
           },
         });
@@ -340,10 +341,10 @@ useEffect(() => {
         console.error("Error fetching player lines:", error.message);
       }
     };
-  
+
     fetchPlayerLines();
   }, []);
-  
+
   const fetchWeeklyStats = async () => {
     if (!playerName.trim()) {
       console.warn("Player name is not set or invalid.");
@@ -449,7 +450,6 @@ useEffect(() => {
       console.error("Error during fetchProjections:", error.message);
     }
   };
-
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

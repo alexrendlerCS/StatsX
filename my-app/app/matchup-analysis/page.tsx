@@ -36,8 +36,42 @@ export default function MatchupAnalysis() {
   const [currentWeekOpponent, setCurrentWeekOpponent] = useState("");
   const [historicalMatchups, setHistoricalMatchups] = useState([]);
   const [recentPerformance, setRecentPerformance] = useState([]);
+  const [selectedStat, setSelectedStat] = useState("fpts");
 
   const currentWeek = 2; // Set to week 2 as requested
+
+  // Get position-specific stats for dropdown
+  const getPositionStats = (position) => {
+    const baseStats = [{ value: "fpts", label: "Fantasy Points" }];
+
+    if (position === "QB") {
+      return [
+        ...baseStats,
+        { value: "passingYards", label: "Pass Yds" },
+        { value: "passingTDs", label: "Pass TDs" },
+        { value: "rushingYards", label: "Rush Yds" },
+        { value: "rushingTDs", label: "Rush TDs" },
+      ];
+    } else if (position === "RB") {
+      return [
+        ...baseStats,
+        { value: "rushingYards", label: "Rush Yds" },
+        { value: "rushingTDs", label: "Rush TDs" },
+        { value: "receivingYards", label: "Rec Yds" },
+        { value: "receptions", label: "Receptions" },
+      ];
+    } else if (position === "WR" || position === "TE") {
+      return [
+        ...baseStats,
+        { value: "receivingYards", label: "Rec Yds" },
+        { value: "receptions", label: "Receptions" },
+        { value: "receivingTDs", label: "Rec TDs" },
+        { value: "targets", label: "Targets" },
+      ];
+    }
+
+    return baseStats;
+  };
 
   const normalizeString = (str) =>
     str
@@ -67,21 +101,8 @@ export default function MatchupAnalysis() {
     }
   };
 
-  const getPlayerWeek2Opponent = async (playerName) => {
+  const getPlayerWeek2Opponent = async (teamId) => {
     try {
-      // First get the player's team
-      const { data: playerStats } = await supabase
-        .from("player_stats")
-        .select("team_id")
-        .eq("player_name", playerName)
-        .limit(1);
-
-      if (!playerStats || playerStats.length === 0) {
-        throw new Error("Player not found");
-      }
-
-      const teamId = playerStats[0].team_id;
-
       // Get the schedule for week 2
       const { data: schedule } = await supabase
         .from("team_schedule")
@@ -128,7 +149,7 @@ export default function MatchupAnalysis() {
       setPlayerInfo(player);
 
       // Get week 2 opponent
-      const opponent = await getPlayerWeek2Opponent(playerName);
+      const opponent = await getPlayerWeek2Opponent(player.team_id);
       if (!opponent) {
         setError("Could not find week 2 opponent");
         setLoading(false);
@@ -139,15 +160,30 @@ export default function MatchupAnalysis() {
       const cleanOpponent = opponent.replace("@", "");
       setCurrentWeekOpponent(cleanOpponent);
 
-      // Get historical matchups against this opponent
-      const { data: historicalData } = await supabase
+      // Get historical matchups against this opponent (regardless of team)
+      // Search for both home and away games (@CLE and CLE)
+      const { data: historicalDataHome } = await supabase
         .from("nfl_historical_stats")
         .select("*")
         .eq("player_name", playerName)
         .eq("opponent", cleanOpponent)
-        .eq("data_type", "weekly")
-        .order("season", { ascending: false })
-        .order("week", { ascending: false });
+        .eq("data_type", "weekly");
+
+      const { data: historicalDataAway } = await supabase
+        .from("nfl_historical_stats")
+        .select("*")
+        .eq("player_name", playerName)
+        .eq("opponent", "@" + cleanOpponent)
+        .eq("data_type", "weekly");
+
+      // Combine and sort the results
+      const allHistoricalData = (historicalDataHome || []).concat(
+        historicalDataAway || []
+      );
+      const historicalData = allHistoricalData.sort((a, b) => {
+        if (a.season !== b.season) return b.season - a.season;
+        return b.week - a.week;
+      });
 
       setHistoricalMatchups(historicalData || []);
 
@@ -192,14 +228,15 @@ export default function MatchupAnalysis() {
           worstGame: Math.min(...historicalData.map((game) => game.fpts || 0)),
         });
       } else {
+        // No historical matchup data available
         setMatchupData({
           gamesPlayed: 0,
-          avgFpts: "N/A",
-          avgRushingYards: "N/A",
-          avgReceivingYards: "N/A",
-          avgReceptions: "N/A",
-          bestGame: "N/A",
-          worstGame: "N/A",
+          avgFpts: "No Data",
+          avgRushingYards: "No Data",
+          avgReceivingYards: "No Data",
+          avgReceptions: "No Data",
+          bestGame: "No Data",
+          worstGame: "No Data",
         });
       }
     } catch (err) {
@@ -252,28 +289,103 @@ export default function MatchupAnalysis() {
   };
 
   const formatChartData = () => {
-    if (!historicalMatchups.length) return [];
+    if (!historicalMatchups.length || !playerInfo) {
+      console.log("formatChartData: No data", {
+        historicalMatchups: historicalMatchups.length,
+        playerInfo,
+      });
+      return [];
+    }
 
-    return historicalMatchups.map((game, index) => ({
-      game: `Game ${index + 1}`,
-      fpts: game.fpts || 0,
-      rushingYards: game.rushing_yards || 0,
-      receivingYards: game.receiving_yards || 0,
-      receptions: game.receptions || 0,
-      season: `${game.season} W${game.week}`,
-    }));
+    console.log("formatChartData: Processing data", {
+      historicalMatchups: historicalMatchups.length,
+      playerInfo,
+    });
+    const chartData = historicalMatchups.map((game, index) => {
+      const baseData = {
+        game: `Game ${index + 1}`,
+        fpts: game.fpts || 0,
+        season: `${game.season} W${game.week}`,
+      };
+
+      // Add position-specific stats
+      if (playerInfo.position_id === "QB") {
+        return {
+          ...baseData,
+          passingYards: game.passing_yards || 0,
+          passingTDs: game.passing_tds || 0,
+          rushingYards: game.rushing_yards || 0,
+          rushingTDs: game.rushing_tds || 0,
+        };
+      } else if (playerInfo.position_id === "RB") {
+        return {
+          ...baseData,
+          rushingYards: game.rushing_yards || 0,
+          rushingTDs: game.rushing_tds || 0,
+          receivingYards: game.receiving_yards || 0,
+          receptions: game.receptions || 0,
+        };
+      } else if (
+        playerInfo.position_id === "WR" ||
+        playerInfo.position_id === "TE"
+      ) {
+        return {
+          ...baseData,
+          receivingYards: game.receiving_yards || 0,
+          receptions: game.receptions || 0,
+          receivingTDs: game.receiving_tds || 0,
+          targets: game.targets || 0,
+        };
+      }
+
+      return baseData;
+    });
+
+    console.log("formatChartData: Final chart data", chartData);
+    return chartData;
   };
 
   const formatRecentData = () => {
-    if (!recentPerformance.length) return [];
+    if (!recentPerformance.length || !playerInfo) return [];
 
-    return recentPerformance.map((game) => ({
-      week: `Week ${game.week}`,
-      fpts: game.fpts || 0,
-      rushingYards: game.rushing_yards || 0,
-      receivingYards: game.receiving_yards || 0,
-      receptions: game.receptions || 0,
-    }));
+    return recentPerformance.map((game) => {
+      const baseData = {
+        week: `Week ${game.week}`,
+        fpts: game.fpts || 0,
+      };
+
+      // Add position-specific stats
+      if (playerInfo.position_id === "QB") {
+        return {
+          ...baseData,
+          passingYards: game.passing_yards || 0,
+          passingTDs: game.passing_tds || 0,
+          rushingYards: game.rushing_yards || 0,
+          rushingTDs: game.rushing_tds || 0,
+        };
+      } else if (playerInfo.position_id === "RB") {
+        return {
+          ...baseData,
+          rushingYards: game.rushing_yards || 0,
+          rushingTDs: game.rushing_tds || 0,
+          receivingYards: game.receiving_yards || 0,
+          receptions: game.receptions || 0,
+        };
+      } else if (
+        playerInfo.position_id === "WR" ||
+        playerInfo.position_id === "TE"
+      ) {
+        return {
+          ...baseData,
+          receivingYards: game.receiving_yards || 0,
+          receptions: game.receptions || 0,
+          receivingTDs: game.receiving_tds || 0,
+          targets: game.targets || 0,
+        };
+      }
+
+      return baseData;
+    });
   };
 
   return (
@@ -286,6 +398,9 @@ export default function MatchupAnalysis() {
           </h1>
           <p className="text-gray-400 text-lg">
             Analyze player performance against their Week {currentWeek} opponent
+          </p>
+          <p className="text-gray-500 text-sm mt-2">
+            Historical data available: 2021-2025 seasons
           </p>
         </div>
 
@@ -356,119 +471,238 @@ export default function MatchupAnalysis() {
               </CardHeader>
             </Card>
 
-            {/* Matchup Summary */}
+            {/* Main Content Layout */}
             {matchupData && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="bg-gray-800 border-gray-700">
-                  <CardContent className="p-4">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-400">
-                        {matchupData.gamesPlayed}
-                      </div>
-                      <div className="text-gray-400 text-sm">
-                        Games vs {currentWeekOpponent}
-                      </div>
+              <div className="flex flex-col lg:flex-row gap-6">
+                {/* Historical Performance Section */}
+                <div className="flex-1">
+                  {/* Historical Matchups Chart */}
+                  {(() => {
+                    console.log("Chart render check:", {
+                      historicalMatchups: historicalMatchups.length,
+                      playerInfo: !!playerInfo,
+                      shouldRender: historicalMatchups.length > 0 && playerInfo,
+                    });
+                    return historicalMatchups.length > 0 && playerInfo;
+                  })() && (
+                    <div className="flex justify-center">
+                      <Card className="bg-gray-800 border-gray-700 max-w-4xl w-full">
+                        <CardHeader>
+                          <CardTitle className="text-xl text-blue-400 flex items-center">
+                            <TrendingUp className="w-6 h-6 mr-2" />
+                            Historical Performance vs {currentWeekOpponent}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-80">
+                            {(() => {
+                              const data = formatChartData();
+                              console.log(
+                                "Chart component rendering with data:",
+                                data
+                              );
+                              return (
+                                <div>
+                                  <div className="h-80 bg-gray-800 rounded-lg p-6 border border-gray-700 flex items-center">
+                                    <div className="w-fit">
+                                      <LineChart
+                                        width={650}
+                                        height={300}
+                                        data={data}
+                                      >
+                                        <CartesianGrid
+                                          strokeDasharray="3 3"
+                                          stroke="#374151"
+                                        />
+                                        <XAxis
+                                          dataKey="season"
+                                          stroke="#9CA3AF"
+                                          fontSize={12}
+                                          angle={-45}
+                                          textAnchor="end"
+                                          height={60}
+                                        />
+                                        <YAxis
+                                          stroke="#9CA3AF"
+                                          fontSize={12}
+                                          label={{
+                                            value: "Fantasy Points",
+                                            angle: -90,
+                                            position: "insideLeft",
+                                            style: {
+                                              textAnchor: "middle",
+                                              fill: "#9CA3AF",
+                                            },
+                                          }}
+                                        />
+                                        <Tooltip
+                                          contentStyle={{
+                                            backgroundColor: "#1F2937",
+                                            border: "1px solid #374151",
+                                            borderRadius: "8px",
+                                            color: "#F9FAFB",
+                                            boxShadow:
+                                              "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                                          }}
+                                          formatter={(value, name) => [
+                                            `${value}${
+                                              selectedStat === "fpts"
+                                                ? " FPts"
+                                                : ""
+                                            }`,
+                                            getPositionStats(
+                                              playerInfo?.position_id
+                                            )?.find(
+                                              (stat) =>
+                                                stat.value === selectedStat
+                                            )?.label || "Value",
+                                          ]}
+                                          labelFormatter={(label) =>
+                                            `Week: ${label}`
+                                          }
+                                        />
+                                        <Line
+                                          type="monotone"
+                                          dataKey={selectedStat}
+                                          stroke="#3B82F6"
+                                          strokeWidth={3}
+                                          dot={{
+                                            fill: "#3B82F6",
+                                            strokeWidth: 2,
+                                            r: 6,
+                                          }}
+                                          activeDot={{
+                                            r: 8,
+                                            stroke: "#3B82F6",
+                                            strokeWidth: 2,
+                                          }}
+                                        />
+                                      </LineChart>
+                                    </div>
+                                    <div className="ml-6 mr-8 flex flex-col justify-center items-center text-center w-48">
+                                      <div className="mb-2">
+                                        <select
+                                          value={selectedStat}
+                                          onChange={(e) =>
+                                            setSelectedStat(e.target.value)
+                                          }
+                                          className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        >
+                                          {playerInfo &&
+                                            getPositionStats(
+                                              playerInfo.position_id
+                                            ).map((stat) => (
+                                              <option
+                                                key={stat.value}
+                                                value={stat.value}
+                                                className="bg-gray-700"
+                                              >
+                                                {stat.label}
+                                              </option>
+                                            ))}
+                                        </select>
+                                      </div>
+                                      <h4 className="text-lg font-semibold text-blue-400 mb-3">
+                                        {getPositionStats(
+                                          playerInfo?.position_id
+                                        )?.find(
+                                          (stat) => stat.value === selectedStat
+                                        )?.label || "Fantasy Points"}{" "}
+                                        Over Time
+                                      </h4>
+                                      <p className="text-gray-400 text-sm leading-relaxed">
+                                        {data.length} games vs{" "}
+                                        {currentWeekOpponent} (2021-2025)
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </CardContent>
+                      </Card>
                     </div>
-                  </CardContent>
-                </Card>
+                  )}
+                </div>
 
-                <Card className="bg-gray-800 border-gray-700">
-                  <CardContent className="p-4">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-400">
-                        {matchupData.avgFpts}
+                {/* Quick Stats Column */}
+                <div className="lg:w-80 flex flex-col gap-4">
+                  <Card className="bg-gray-800 border-gray-700">
+                    <CardContent className="p-4">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-400">
+                          {matchupData.gamesPlayed}
+                        </div>
+                        <div className="text-gray-400 text-sm">
+                          Games vs {currentWeekOpponent}
+                        </div>
                       </div>
-                      <div className="text-gray-400 text-sm">
-                        Avg Fantasy Points
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
 
-                <Card className="bg-gray-800 border-gray-700">
-                  <CardContent className="p-4">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-yellow-400">
-                        {matchupData.bestGame}
+                  <Card className="bg-gray-800 border-gray-700">
+                    <CardContent className="p-4">
+                      <div className="text-center">
+                        <div
+                          className={`text-2xl font-bold ${
+                            matchupData.avgFpts === "No Data"
+                              ? "text-gray-500"
+                              : "text-green-400"
+                          }`}
+                        >
+                          {matchupData.avgFpts}
+                        </div>
+                        <div className="text-gray-400 text-sm">
+                          Avg Fantasy Points
+                        </div>
                       </div>
-                      <div className="text-gray-400 text-sm">
-                        Best Game (FPts)
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
 
-                <Card className="bg-gray-800 border-gray-700">
-                  <CardContent className="p-4">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-red-400">
-                        {matchupData.worstGame}
+                  <Card className="bg-gray-800 border-gray-700">
+                    <CardContent className="p-4">
+                      <div className="text-center">
+                        <div
+                          className={`text-2xl font-bold ${
+                            matchupData.bestGame === "No Data"
+                              ? "text-gray-500"
+                              : "text-yellow-400"
+                          }`}
+                        >
+                          {matchupData.bestGame}
+                        </div>
+                        <div className="text-gray-400 text-sm">
+                          Best Game (FPts)
+                        </div>
                       </div>
-                      <div className="text-gray-400 text-sm">
-                        Worst Game (FPts)
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-gray-800 border-gray-700">
+                    <CardContent className="p-4">
+                      <div className="text-center">
+                        <div
+                          className={`text-2xl font-bold ${
+                            matchupData.worstGame === "No Data"
+                              ? "text-gray-500"
+                              : "text-red-400"
+                          }`}
+                        >
+                          {matchupData.worstGame}
+                        </div>
+                        <div className="text-gray-400 text-sm">
+                          Worst Game (FPts)
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             )}
 
-            {/* Historical Matchups Chart */}
-            {historicalMatchups.length > 0 && (
-              <Card className="bg-gray-800 border-gray-700">
-                <CardHeader>
-                  <CardTitle className="text-xl text-blue-400 flex items-center">
-                    <TrendingUp className="w-6 h-6 mr-2" />
-                    Historical Performance vs {currentWeekOpponent}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-80">
-                    <LineChart
-                      width="100%"
-                      height="100%"
-                      data={formatChartData()}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis dataKey="season" stroke="#9CA3AF" fontSize={12} />
-                      <YAxis stroke="#9CA3AF" fontSize={12} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#1F2937",
-                          border: "1px solid #374151",
-                          borderRadius: "6px",
-                          color: "#F9FAFB",
-                        }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="fpts"
-                        stroke="#3B82F6"
-                        strokeWidth={3}
-                        name="Fantasy Points"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="rushingYards"
-                        stroke="#10B981"
-                        strokeWidth={2}
-                        name="Rushing Yards"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="receivingYards"
-                        stroke="#F59E0B"
-                        strokeWidth={2}
-                        name="Receiving Yards"
-                      />
-                    </LineChart>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
             {/* Recent Performance */}
-            {recentPerformance.length > 0 && (
+            {recentPerformance.length > 0 && playerInfo && (
               <Card className="bg-gray-800 border-gray-700">
                 <CardHeader>
                   <CardTitle className="text-xl text-blue-400 flex items-center">
@@ -479,8 +713,8 @@ export default function MatchupAnalysis() {
                 <CardContent>
                   <div className="h-80">
                     <BarChart
-                      width="100%"
-                      height="100%"
+                      width={800}
+                      height={300}
                       data={formatRecentData()}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -499,16 +733,79 @@ export default function MatchupAnalysis() {
                         fill="#3B82F6"
                         name="Fantasy Points"
                       />
-                      <Bar
-                        dataKey="rushingYards"
-                        fill="#10B981"
-                        name="Rushing Yards"
-                      />
-                      <Bar
-                        dataKey="receivingYards"
-                        fill="#F59E0B"
-                        name="Receiving Yards"
-                      />
+                      {playerInfo.position_id === "QB" && (
+                        <>
+                          <Bar
+                            dataKey="passingYards"
+                            fill="#10B981"
+                            name="Passing Yards"
+                          />
+                          <Bar
+                            dataKey="passingTDs"
+                            fill="#F59E0B"
+                            name="Passing TDs"
+                          />
+                          <Bar
+                            dataKey="rushingYards"
+                            fill="#EF4444"
+                            name="Rushing Yards"
+                          />
+                          <Bar
+                            dataKey="rushingTDs"
+                            fill="#8B5CF6"
+                            name="Rushing TDs"
+                          />
+                        </>
+                      )}
+                      {playerInfo.position_id === "RB" && (
+                        <>
+                          <Bar
+                            dataKey="rushingYards"
+                            fill="#10B981"
+                            name="Rushing Yards"
+                          />
+                          <Bar
+                            dataKey="rushingTDs"
+                            fill="#F59E0B"
+                            name="Rushing TDs"
+                          />
+                          <Bar
+                            dataKey="receivingYards"
+                            fill="#EF4444"
+                            name="Receiving Yards"
+                          />
+                          <Bar
+                            dataKey="receptions"
+                            fill="#8B5CF6"
+                            name="Receptions"
+                          />
+                        </>
+                      )}
+                      {(playerInfo.position_id === "WR" ||
+                        playerInfo.position_id === "TE") && (
+                        <>
+                          <Bar
+                            dataKey="receivingYards"
+                            fill="#10B981"
+                            name="Receiving Yards"
+                          />
+                          <Bar
+                            dataKey="receptions"
+                            fill="#F59E0B"
+                            name="Receptions"
+                          />
+                          <Bar
+                            dataKey="receivingTDs"
+                            fill="#EF4444"
+                            name="Receiving TDs"
+                          />
+                          <Bar
+                            dataKey="targets"
+                            fill="#8B5CF6"
+                            name="Targets"
+                          />
+                        </>
+                      )}
                     </BarChart>
                   </div>
                 </CardContent>
@@ -516,7 +813,7 @@ export default function MatchupAnalysis() {
             )}
 
             {/* Historical Matchups Table */}
-            {historicalMatchups.length > 0 && (
+            {historicalMatchups.length > 0 && playerInfo && (
               <Card className="bg-gray-800 border-gray-700">
                 <CardHeader>
                   <CardTitle className="text-xl text-blue-400">
@@ -533,21 +830,55 @@ export default function MatchupAnalysis() {
                           </th>
                           <th className="text-left py-2 text-gray-400">Week</th>
                           <th className="text-left py-2 text-gray-400">FPts</th>
-                          <th className="text-left py-2 text-gray-400">
-                            Rush Yds
-                          </th>
-                          <th className="text-left py-2 text-gray-400">
-                            Rec Yds
-                          </th>
-                          <th className="text-left py-2 text-gray-400">
-                            Receptions
-                          </th>
-                          <th className="text-left py-2 text-gray-400">
-                            Rush TDs
-                          </th>
-                          <th className="text-left py-2 text-gray-400">
-                            Rec TDs
-                          </th>
+                          {playerInfo.position_id === "QB" && (
+                            <>
+                              <th className="text-left py-2 text-gray-400">
+                                Pass Yds
+                              </th>
+                              <th className="text-left py-2 text-gray-400">
+                                Pass TDs
+                              </th>
+                              <th className="text-left py-2 text-gray-400">
+                                Rush Yds
+                              </th>
+                              <th className="text-left py-2 text-gray-400">
+                                Rush TDs
+                              </th>
+                            </>
+                          )}
+                          {playerInfo.position_id === "RB" && (
+                            <>
+                              <th className="text-left py-2 text-gray-400">
+                                Rush Yds
+                              </th>
+                              <th className="text-left py-2 text-gray-400">
+                                Rush TDs
+                              </th>
+                              <th className="text-left py-2 text-gray-400">
+                                Rec Yds
+                              </th>
+                              <th className="text-left py-2 text-gray-400">
+                                Receptions
+                              </th>
+                            </>
+                          )}
+                          {(playerInfo.position_id === "WR" ||
+                            playerInfo.position_id === "TE") && (
+                            <>
+                              <th className="text-left py-2 text-gray-400">
+                                Targets
+                              </th>
+                              <th className="text-left py-2 text-gray-400">
+                                Receptions
+                              </th>
+                              <th className="text-left py-2 text-gray-400">
+                                Rec Yds
+                              </th>
+                              <th className="text-left py-2 text-gray-400">
+                                Rec TDs
+                              </th>
+                            </>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
@@ -560,21 +891,55 @@ export default function MatchupAnalysis() {
                             <td className="py-2 text-blue-400 font-semibold">
                               {game.fpts || 0}
                             </td>
-                            <td className="py-2 text-green-400">
-                              {game.rushing_yards || 0}
-                            </td>
-                            <td className="py-2 text-yellow-400">
-                              {game.receiving_yards || 0}
-                            </td>
-                            <td className="py-2 text-gray-300">
-                              {game.receptions || 0}
-                            </td>
-                            <td className="py-2 text-gray-300">
-                              {game.rushing_tds || 0}
-                            </td>
-                            <td className="py-2 text-gray-300">
-                              {game.receiving_tds || 0}
-                            </td>
+                            {playerInfo.position_id === "QB" && (
+                              <>
+                                <td className="py-2 text-green-400">
+                                  {game.passing_yards || 0}
+                                </td>
+                                <td className="py-2 text-yellow-400">
+                                  {game.passing_tds || 0}
+                                </td>
+                                <td className="py-2 text-red-400">
+                                  {game.rushing_yards || 0}
+                                </td>
+                                <td className="py-2 text-purple-400">
+                                  {game.rushing_tds || 0}
+                                </td>
+                              </>
+                            )}
+                            {playerInfo.position_id === "RB" && (
+                              <>
+                                <td className="py-2 text-green-400">
+                                  {game.rushing_yards || 0}
+                                </td>
+                                <td className="py-2 text-yellow-400">
+                                  {game.rushing_tds || 0}
+                                </td>
+                                <td className="py-2 text-red-400">
+                                  {game.receiving_yards || 0}
+                                </td>
+                                <td className="py-2 text-purple-400">
+                                  {game.receptions || 0}
+                                </td>
+                              </>
+                            )}
+                            {(playerInfo.position_id === "WR" ||
+                              playerInfo.position_id === "TE") && (
+                              <>
+                                <td className="py-2 text-green-400">
+                                  {game.targets || 0}
+                                </td>
+                                <td className="py-2 text-yellow-400">
+                                  {game.receptions || 0}
+                                </td>
+                                <td className="py-2 text-red-400">
+                                  {game.receiving_yards || 0}
+                                </td>
+                                <td className="py-2 text-purple-400">
+                                  {game.receiving_tds || 0}
+                                </td>
+                              </>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -592,11 +957,27 @@ export default function MatchupAnalysis() {
                   <h3 className="text-xl font-semibold text-gray-400 mb-2">
                     No Historical Matchup Data
                   </h3>
-                  <p className="text-gray-500">
+                  <p className="text-gray-500 mb-4">
                     No previous games found between {playerName} and{" "}
-                    {currentWeekOpponent}. This could be their first matchup or
-                    the data is not available.
+                    {currentWeekOpponent} in our historical records (2021-2025).
+                    This could be their first matchup in recent seasons, or the
+                    data is not available.
                   </p>
+                  <div className="bg-gray-700 rounded-lg p-4 text-left">
+                    <h4 className="text-blue-400 font-semibold mb-2">
+                      💡 Analysis Tips:
+                    </h4>
+                    <ul className="text-gray-300 text-sm space-y-1">
+                      <li>
+                        • Check their recent performance (last 4 weeks) below
+                      </li>
+                      <li>
+                        • Consider {currentWeekOpponent}'s defensive stats
+                      </li>
+                      <li>• Look at {playerName}'s season averages</li>
+                      <li>• Review weather conditions and game script</li>
+                    </ul>
+                  </div>
                 </CardContent>
               </Card>
             )}
