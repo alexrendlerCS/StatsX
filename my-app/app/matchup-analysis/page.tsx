@@ -179,12 +179,30 @@ export default function MatchupAnalysis() {
       const allHistoricalData = (historicalDataHome || []).concat(
         historicalDataAway || []
       );
-      const historicalData = allHistoricalData.sort((a, b) => {
+      const sortedData = allHistoricalData.sort((a, b) => {
         if (a.season !== b.season) return a.season - b.season;
         return a.week - b.week;
       });
 
-      setHistoricalMatchups(historicalData || []);
+      // Filter out games where player didn't play (all stats are 0)
+      const filteredHistoricalData = sortedData.filter((game) => {
+        // Check if all key stats are 0 (indicating player didn't play)
+        const totalStats =
+          (game.fpts || 0) +
+          (game.passing_yards || 0) +
+          (game.passing_tds || 0) +
+          (game.rushing_yards || 0) +
+          (game.rushing_tds || 0) +
+          (game.receiving_yards || 0) +
+          (game.receiving_tds || 0) +
+          (game.receptions || 0) +
+          (game.targets || 0);
+
+        // Only include games where the player actually played (total stats > 0)
+        return totalStats > 0;
+      });
+
+      setHistoricalMatchups(filteredHistoricalData || []);
 
       // Get recent performance (last 4 weeks)
       const { data: recentData } = await supabase
@@ -196,35 +214,41 @@ export default function MatchupAnalysis() {
 
       setRecentPerformance(recentData || []);
 
-      // Calculate matchup summary
-      if (historicalData && historicalData.length > 0) {
+      // Calculate matchup summary using filtered data
+      if (filteredHistoricalData && filteredHistoricalData.length > 0) {
         const avgFpts =
-          historicalData.reduce((sum, game) => sum + (game.fpts || 0), 0) /
-          historicalData.length;
+          filteredHistoricalData.reduce(
+            (sum, game) => sum + (game.fpts || 0),
+            0
+          ) / filteredHistoricalData.length;
         const avgRushingYards =
-          historicalData.reduce(
+          filteredHistoricalData.reduce(
             (sum, game) => sum + (game.rushing_yards || 0),
             0
-          ) / historicalData.length;
+          ) / filteredHistoricalData.length;
         const avgReceivingYards =
-          historicalData.reduce(
+          filteredHistoricalData.reduce(
             (sum, game) => sum + (game.receiving_yards || 0),
             0
-          ) / historicalData.length;
+          ) / filteredHistoricalData.length;
         const avgReceptions =
-          historicalData.reduce(
+          filteredHistoricalData.reduce(
             (sum, game) => sum + (game.receptions || 0),
             0
-          ) / historicalData.length;
+          ) / filteredHistoricalData.length;
 
         setMatchupData({
-          gamesPlayed: historicalData.length,
+          gamesPlayed: filteredHistoricalData.length,
           avgFpts: avgFpts.toFixed(1),
           avgRushingYards: avgRushingYards.toFixed(1),
           avgReceivingYards: avgReceivingYards.toFixed(1),
           avgReceptions: avgReceptions.toFixed(1),
-          bestGame: Math.max(...historicalData.map((game) => game.fpts || 0)),
-          worstGame: Math.min(...historicalData.map((game) => game.fpts || 0)),
+          bestGame: Math.max(
+            ...filteredHistoricalData.map((game) => game.fpts || 0)
+          ),
+          worstGame: Math.min(
+            ...filteredHistoricalData.map((game) => game.fpts || 0)
+          ),
         });
       } else {
         // No historical matchup data available
