@@ -4,7 +4,7 @@ from psycopg2.extras import execute_values
 from datetime import datetime, timezone
 
 # Load environment variables
-load_dotenv()
+load_dotenv('../my-app/.env')
 
 # Get sensitive info from environment
 SUPABASE_HOST = os.getenv("SUPABASE_HOST")

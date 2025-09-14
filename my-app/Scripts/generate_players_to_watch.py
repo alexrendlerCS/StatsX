@@ -5,21 +5,22 @@ from psycopg2.extras import execute_values
 
 load_dotenv()
 
-DB_HOST = os.getenv("SUPABASE_HOST")
-DB_PORT = os.getenv("SUPABASE_PORT")
-DB_NAME = os.getenv("SUPABASE_DB")
-DB_USER = os.getenv("SUPABASE_USER")
-DB_PASSWORD = os.getenv("SUPABASE_PASSWORD")
+SUPABASE_HOST = os.getenv("SUPABASE_HOST")
+SUPABASE_PORT = os.getenv("SUPABASE_PORT")
+SUPABASE_DB = os.getenv("SUPABASE_DB")
+SUPABASE_USER = os.getenv("SUPABASE_USER")
+SUPABASE_PASSWORD = os.getenv("SUPABASE_PASSWORD")
 
 CURRENT_WEEK = 17  # Update as needed
 
 def connect_db():
     return psycopg2.connect(
-        host=DB_HOST,
-        port=DB_PORT,
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD
+        host=SUPABASE_HOST,
+        port=SUPABASE_PORT,
+        dbname=SUPABASE_DB,
+        user=SUPABASE_USER,
+        password=SUPABASE_PASSWORD,
+        sslmode="require"
     )
 
 def normalize_name(name):
