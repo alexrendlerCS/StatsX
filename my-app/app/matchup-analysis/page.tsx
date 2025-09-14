@@ -10,8 +10,6 @@ import {
   XAxis,
   Tooltip,
   YAxis,
-  BarChart,
-  Bar,
 } from "recharts";
 import {
   Target,
