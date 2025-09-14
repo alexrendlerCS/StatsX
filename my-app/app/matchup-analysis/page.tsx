@@ -248,7 +248,6 @@ export default function MatchupAnalysis() {
     }
   };
 
-
   const formatChartData = () => {
     if (!historicalMatchups.length || !playerInfo) {
       console.log("formatChartData: No data", {
