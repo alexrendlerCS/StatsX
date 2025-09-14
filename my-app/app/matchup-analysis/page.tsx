@@ -195,7 +195,7 @@ export default function MatchupAnalysis() {
           (game.rushing_tds || 0) +
           (game.receiving_yards || 0) +
           (game.receiving_tds || 0) +
-          (game.receptions || 0) +
+          (game.total_touches || 0) +
           (game.targets || 0);
 
         // Only include games where the player actually played (total stats > 0)
@@ -233,7 +233,7 @@ export default function MatchupAnalysis() {
           ) / filteredHistoricalData.length;
         const avgReceptions =
           filteredHistoricalData.reduce(
-            (sum, game) => sum + (game.receptions || 0),
+            (sum, game) => sum + (game.total_touches || 0),
             0
           ) / filteredHistoricalData.length;
 
@@ -305,7 +305,7 @@ export default function MatchupAnalysis() {
           rushingYards: game.rushing_yards || 0,
           rushingTDs: game.rushing_tds || 0,
           receivingYards: game.receiving_yards || 0,
-          receptions: game.receptions || 0,
+          receptions: game.total_touches || 0,
         };
       } else if (
         playerInfo.position_id === "WR" ||
@@ -314,7 +314,7 @@ export default function MatchupAnalysis() {
         return {
           ...baseData,
           receivingYards: game.receiving_yards || 0,
-          receptions: game.receptions || 0,
+          receptions: game.total_touches || 0,
           receivingTDs: game.receiving_tds || 0,
           targets: game.targets || 0,
         };
@@ -351,7 +351,7 @@ export default function MatchupAnalysis() {
           rushingYards: game.rushing_yards || 0,
           rushingTDs: game.rushing_tds || 0,
           receivingYards: game.receiving_yards || 0,
-          receptions: game.receptions || 0,
+          receptions: game.total_touches || 0,
         };
       } else if (
         playerInfo.position_id === "WR" ||
@@ -360,7 +360,7 @@ export default function MatchupAnalysis() {
         return {
           ...baseData,
           receivingYards: game.receiving_yards || 0,
-          receptions: game.receptions || 0,
+          receptions: game.total_touches || 0,
           receivingTDs: game.receiving_tds || 0,
           targets: game.targets || 0,
         };
@@ -906,7 +906,7 @@ export default function MatchupAnalysis() {
                                   {game.receiving_yards || 0}
                                 </td>
                                 <td className="py-2 text-purple-400">
-                                  {game.receptions || 0}
+                                  {game.total_touches || 0}
                                 </td>
                               </>
                             )}
@@ -917,7 +917,7 @@ export default function MatchupAnalysis() {
                                   {game.targets || 0}
                                 </td>
                                 <td className="py-2 text-yellow-400">
-                                  {game.receptions || 0}
+                                  {game.total_touches || 0}
                                 </td>
                                 <td className="py-2 text-red-400">
                                   {game.receiving_yards || 0}
