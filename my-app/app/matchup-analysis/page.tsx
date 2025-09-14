@@ -21,7 +21,7 @@ import {
   Calendar,
 } from "lucide-react";
 import supabase from "../supabaseClient";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 export default function MatchupAnalysis() {
   const [playerName, setPlayerName] = useState("");
@@ -248,46 +248,6 @@ export default function MatchupAnalysis() {
     }
   };
 
-  const getColumns = () => {
-    if (!playerInfo) return [];
-
-    if (playerInfo.position_id === "QB") {
-      return [
-        { label: "Passing Attempts", key: "passing_attempts" },
-        { label: "Completions", key: "completions" },
-        { label: "Passing Yards", key: "passing_yards" },
-        { label: "Passing TDs", key: "passing_tds" },
-        { label: "Interceptions", key: "interceptions" },
-        { label: "Rushing Attempts", key: "rushing_attempts" },
-        { label: "Rushing Yards", key: "rushing_yards" },
-        { label: "Rushing TDs", key: "rushing_tds" },
-      ];
-    } else if (
-      playerInfo.position_id === "WR" ||
-      playerInfo.position_id === "TE"
-    ) {
-      return [
-        { label: "Targets", key: "targets" },
-        { label: "Receptions", key: "receptions" },
-        { label: "Receiving Yards", key: "receiving_yards" },
-        { label: "Receiving TDs", key: "receiving_tds" },
-        { label: "Rushing Attempts", key: "rushing_attempts" },
-        { label: "Rushing Yards", key: "rushing_yards" },
-        { label: "Rushing TDs", key: "rushing_tds" },
-      ];
-    } else if (playerInfo.position_id === "RB") {
-      return [
-        { label: "Rushing Attempts", key: "rushing_attempts" },
-        { label: "Rushing Yards", key: "rushing_yards" },
-        { label: "Rushing TDs", key: "rushing_tds" },
-        { label: "Targets", key: "targets" },
-        { label: "Receptions", key: "receptions" },
-        { label: "Receiving Yards", key: "receiving_yards" },
-        { label: "Receiving TDs", key: "receiving_tds" },
-      ];
-    }
-    return [];
-  };
 
   const formatChartData = () => {
     if (!historicalMatchups.length || !playerInfo) {
@@ -544,7 +504,7 @@ export default function MatchupAnalysis() {
                                           boxShadow:
                                             "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                                         }}
-                                        formatter={(value, name) => [
+                                        formatter={(value) => [
                                           `${value}${
                                             selectedStat === "fpts"
                                               ? " FPts"
@@ -751,7 +711,7 @@ export default function MatchupAnalysis() {
                               color: "#F9FAFB",
                               boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                             }}
-                            formatter={(value, name) => [
+                            formatter={(value) => [
                               `${value}${
                                 selectedRecentStat === "fpts" ? " FPts" : ""
                               }`,
@@ -978,9 +938,9 @@ export default function MatchupAnalysis() {
                         • Check their recent performance (last 4 weeks) below
                       </li>
                       <li>
-                        • Consider {currentWeekOpponent}'s defensive stats
+                        • Consider {currentWeekOpponent}&apos;s defensive stats
                       </li>
-                      <li>• Look at {playerName}'s season averages</li>
+                      <li>• Look at {playerName}&apos;s season averages</li>
                       <li>• Review weather conditions and game script</li>
                     </ul>
                   </div>
