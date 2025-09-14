@@ -37,6 +37,7 @@ export default function MatchupAnalysis() {
   const [historicalMatchups, setHistoricalMatchups] = useState([]);
   const [recentPerformance, setRecentPerformance] = useState([]);
   const [selectedStat, setSelectedStat] = useState("fpts");
+  const [selectedRecentStat, setSelectedRecentStat] = useState("fpts");
 
   const currentWeek = 2; // Set to week 2 as requested
 
@@ -354,7 +355,7 @@ export default function MatchupAnalysis() {
         fpts: game.fpts || 0,
       };
 
-      // Add position-specific stats
+      // Add position-specific stats using the same keys as getPositionStats
       if (playerInfo.position_id === "QB") {
         return {
           ...baseData,
@@ -709,102 +710,109 @@ export default function MatchupAnalysis() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-80">
-                    <BarChart
-                      width={800}
-                      height={300}
-                      data={formatRecentData()}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis dataKey="week" stroke="#9CA3AF" fontSize={12} />
-                      <YAxis stroke="#9CA3AF" fontSize={12} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#1F2937",
-                          border: "1px solid #374151",
-                          borderRadius: "6px",
-                          color: "#F9FAFB",
-                        }}
-                      />
-                      <Bar
-                        dataKey="fpts"
-                        fill="#3B82F6"
-                        name="Fantasy Points"
-                      />
-                      {playerInfo.position_id === "QB" && (
-                        <>
-                          <Bar
-                            dataKey="passingYards"
-                            fill="#10B981"
-                            name="Passing Yards"
+                  <div className="h-96">
+                    <div className="h-96 bg-gray-800 rounded-lg p-6 border border-gray-700 flex items-center">
+                      <div className="w-fit">
+                        <LineChart
+                          width={650}
+                          height={360}
+                          data={formatRecentData()}
+                        >
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#374151"
                           />
-                          <Bar
-                            dataKey="passingTDs"
-                            fill="#F59E0B"
-                            name="Passing TDs"
+                          <XAxis
+                            dataKey="week"
+                            stroke="#9CA3AF"
+                            fontSize={12}
                           />
-                          <Bar
-                            dataKey="rushingYards"
-                            fill="#EF4444"
-                            name="Rushing Yards"
+                          <YAxis
+                            stroke="#9CA3AF"
+                            fontSize={12}
+                            label={{
+                              value:
+                                getPositionStats(playerInfo?.position_id)?.find(
+                                  (stat) => stat.value === selectedRecentStat
+                                )?.label || "Fantasy Points",
+                              angle: -90,
+                              position: "insideLeft",
+                              style: {
+                                textAnchor: "middle",
+                                fill: "#9CA3AF",
+                              },
+                            }}
                           />
-                          <Bar
-                            dataKey="rushingTDs"
-                            fill="#8B5CF6"
-                            name="Rushing TDs"
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "#1F2937",
+                              border: "1px solid #374151",
+                              borderRadius: "8px",
+                              color: "#F9FAFB",
+                              boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                            }}
+                            formatter={(value, name) => [
+                              `${value}${
+                                selectedRecentStat === "fpts" ? " FPts" : ""
+                              }`,
+                              getPositionStats(playerInfo?.position_id)?.find(
+                                (stat) => stat.value === selectedRecentStat
+                              )?.label || "Value",
+                            ]}
+                            labelFormatter={(label) => `Week: ${label}`}
                           />
-                        </>
-                      )}
-                      {playerInfo.position_id === "RB" && (
-                        <>
-                          <Bar
-                            dataKey="rushingYards"
-                            fill="#10B981"
-                            name="Rushing Yards"
+                          <Line
+                            type="monotone"
+                            dataKey={selectedRecentStat}
+                            stroke="#3B82F6"
+                            strokeWidth={3}
+                            dot={{
+                              fill: "#3B82F6",
+                              strokeWidth: 2,
+                              r: 6,
+                            }}
+                            activeDot={{
+                              r: 8,
+                              stroke: "#3B82F6",
+                              strokeWidth: 2,
+                            }}
                           />
-                          <Bar
-                            dataKey="rushingTDs"
-                            fill="#F59E0B"
-                            name="Rushing TDs"
-                          />
-                          <Bar
-                            dataKey="receivingYards"
-                            fill="#EF4444"
-                            name="Receiving Yards"
-                          />
-                          <Bar
-                            dataKey="receptions"
-                            fill="#8B5CF6"
-                            name="Receptions"
-                          />
-                        </>
-                      )}
-                      {(playerInfo.position_id === "WR" ||
-                        playerInfo.position_id === "TE") && (
-                        <>
-                          <Bar
-                            dataKey="receivingYards"
-                            fill="#10B981"
-                            name="Receiving Yards"
-                          />
-                          <Bar
-                            dataKey="receptions"
-                            fill="#F59E0B"
-                            name="Receptions"
-                          />
-                          <Bar
-                            dataKey="receivingTDs"
-                            fill="#EF4444"
-                            name="Receiving TDs"
-                          />
-                          <Bar
-                            dataKey="targets"
-                            fill="#8B5CF6"
-                            name="Targets"
-                          />
-                        </>
-                      )}
-                    </BarChart>
+                        </LineChart>
+                      </div>
+                      <div className="ml-6 mr-8 flex flex-col justify-center items-center text-center w-48">
+                        <div className="mb-2">
+                          <select
+                            value={selectedRecentStat}
+                            onChange={(e) =>
+                              setSelectedRecentStat(e.target.value)
+                            }
+                            className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            {playerInfo &&
+                              getPositionStats(playerInfo.position_id).map(
+                                (stat) => (
+                                  <option
+                                    key={stat.value}
+                                    value={stat.value}
+                                    className="bg-gray-700"
+                                  >
+                                    {stat.label}
+                                  </option>
+                                )
+                              )}
+                          </select>
+                        </div>
+                        <h4 className="text-lg font-semibold text-blue-400 mb-3">
+                          {getPositionStats(playerInfo?.position_id)?.find(
+                            (stat) => stat.value === selectedRecentStat
+                          )?.label || "Fantasy Points"}{" "}
+                          Trend
+                        </h4>
+                        <p className="text-gray-400 text-sm leading-relaxed">
+                          Last 4 weeks performance
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
