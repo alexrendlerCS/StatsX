@@ -181,8 +181,8 @@ export default function MatchupAnalysis() {
         historicalDataAway || []
       );
       const historicalData = allHistoricalData.sort((a, b) => {
-        if (a.season !== b.season) return b.season - a.season;
-        return b.week - a.week;
+        if (a.season !== b.season) return a.season - b.season;
+        return a.week - b.week;
       });
 
       setHistoricalMatchups(historicalData || []);
@@ -471,234 +471,232 @@ export default function MatchupAnalysis() {
               </CardHeader>
             </Card>
 
-            {/* Main Content Layout */}
+            {/* Historical Performance and Quick Stats Container */}
             {matchupData && (
-              <div className="flex flex-col lg:flex-row gap-6">
-                {/* Historical Performance Section */}
-                <div className="flex-1">
-                  {/* Historical Matchups Chart */}
-                  {(() => {
-                    console.log("Chart render check:", {
-                      historicalMatchups: historicalMatchups.length,
-                      playerInfo: !!playerInfo,
-                      shouldRender: historicalMatchups.length > 0 && playerInfo,
-                    });
-                    return historicalMatchups.length > 0 && playerInfo;
-                  })() && (
-                    <div className="flex justify-center">
-                      <Card className="bg-gray-800 border-gray-700 max-w-4xl w-full">
-                        <CardHeader>
-                          <CardTitle className="text-xl text-blue-400 flex items-center">
-                            <TrendingUp className="w-6 h-6 mr-2" />
-                            Historical Performance vs {currentWeekOpponent}
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="h-80">
-                            {(() => {
-                              const data = formatChartData();
-                              console.log(
-                                "Chart component rendering with data:",
-                                data
-                              );
-                              return (
-                                <div>
-                                  <div className="h-80 bg-gray-800 rounded-lg p-6 border border-gray-700 flex items-center">
-                                    <div className="w-fit">
-                                      <LineChart
-                                        width={650}
-                                        height={300}
-                                        data={data}
+              <Card className="bg-gray-800 border-gray-700">
+                <CardHeader>
+                  <CardTitle className="text-xl text-blue-400 flex items-center">
+                    <TrendingUp className="w-6 h-6 mr-2" />
+                    Historical Performance vs {currentWeekOpponent}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col lg:flex-row gap-6">
+                    {/* Historical Matchups Chart */}
+                    <div className="flex-1">
+                      {(() => {
+                        console.log("Chart render check:", {
+                          historicalMatchups: historicalMatchups.length,
+                          playerInfo: !!playerInfo,
+                          shouldRender:
+                            historicalMatchups.length > 0 && playerInfo,
+                        });
+                        return historicalMatchups.length > 0 && playerInfo;
+                      })() && (
+                        <div className="h-96">
+                          {(() => {
+                            const data = formatChartData();
+                            console.log(
+                              "Chart component rendering with data:",
+                              data
+                            );
+                            return (
+                              <div>
+                                <div className="h-96 bg-gray-800 rounded-lg p-6 border border-gray-700 flex items-center">
+                                  <div className="w-fit">
+                                    <LineChart
+                                      width={650}
+                                      height={360}
+                                      data={data}
+                                    >
+                                      <CartesianGrid
+                                        strokeDasharray="3 3"
+                                        stroke="#374151"
+                                      />
+                                      <XAxis
+                                        dataKey="season"
+                                        stroke="#9CA3AF"
+                                        fontSize={12}
+                                        angle={-45}
+                                        textAnchor="end"
+                                        height={60}
+                                      />
+                                      <YAxis
+                                        stroke="#9CA3AF"
+                                        fontSize={12}
+                                        label={{
+                                          value: "Fantasy Points",
+                                          angle: -90,
+                                          position: "insideLeft",
+                                          style: {
+                                            textAnchor: "middle",
+                                            fill: "#9CA3AF",
+                                          },
+                                        }}
+                                      />
+                                      <Tooltip
+                                        contentStyle={{
+                                          backgroundColor: "#1F2937",
+                                          border: "1px solid #374151",
+                                          borderRadius: "8px",
+                                          color: "#F9FAFB",
+                                          boxShadow:
+                                            "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                                        }}
+                                        formatter={(value, name) => [
+                                          `${value}${
+                                            selectedStat === "fpts"
+                                              ? " FPts"
+                                              : ""
+                                          }`,
+                                          getPositionStats(
+                                            playerInfo?.position_id
+                                          )?.find(
+                                            (stat) =>
+                                              stat.value === selectedStat
+                                          )?.label || "Value",
+                                        ]}
+                                        labelFormatter={(label) =>
+                                          `Week: ${label}`
+                                        }
+                                      />
+                                      <Line
+                                        type="monotone"
+                                        dataKey={selectedStat}
+                                        stroke="#3B82F6"
+                                        strokeWidth={3}
+                                        dot={{
+                                          fill: "#3B82F6",
+                                          strokeWidth: 2,
+                                          r: 6,
+                                        }}
+                                        activeDot={{
+                                          r: 8,
+                                          stroke: "#3B82F6",
+                                          strokeWidth: 2,
+                                        }}
+                                      />
+                                    </LineChart>
+                                  </div>
+                                  <div className="ml-6 mr-8 flex flex-col justify-center items-center text-center w-48">
+                                    <div className="mb-2">
+                                      <select
+                                        value={selectedStat}
+                                        onChange={(e) =>
+                                          setSelectedStat(e.target.value)
+                                        }
+                                        className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                       >
-                                        <CartesianGrid
-                                          strokeDasharray="3 3"
-                                          stroke="#374151"
-                                        />
-                                        <XAxis
-                                          dataKey="season"
-                                          stroke="#9CA3AF"
-                                          fontSize={12}
-                                          angle={-45}
-                                          textAnchor="end"
-                                          height={60}
-                                        />
-                                        <YAxis
-                                          stroke="#9CA3AF"
-                                          fontSize={12}
-                                          label={{
-                                            value: "Fantasy Points",
-                                            angle: -90,
-                                            position: "insideLeft",
-                                            style: {
-                                              textAnchor: "middle",
-                                              fill: "#9CA3AF",
-                                            },
-                                          }}
-                                        />
-                                        <Tooltip
-                                          contentStyle={{
-                                            backgroundColor: "#1F2937",
-                                            border: "1px solid #374151",
-                                            borderRadius: "8px",
-                                            color: "#F9FAFB",
-                                            boxShadow:
-                                              "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-                                          }}
-                                          formatter={(value, name) => [
-                                            `${value}${
-                                              selectedStat === "fpts"
-                                                ? " FPts"
-                                                : ""
-                                            }`,
-                                            getPositionStats(
-                                              playerInfo?.position_id
-                                            )?.find(
-                                              (stat) =>
-                                                stat.value === selectedStat
-                                            )?.label || "Value",
-                                          ]}
-                                          labelFormatter={(label) =>
-                                            `Week: ${label}`
-                                          }
-                                        />
-                                        <Line
-                                          type="monotone"
-                                          dataKey={selectedStat}
-                                          stroke="#3B82F6"
-                                          strokeWidth={3}
-                                          dot={{
-                                            fill: "#3B82F6",
-                                            strokeWidth: 2,
-                                            r: 6,
-                                          }}
-                                          activeDot={{
-                                            r: 8,
-                                            stroke: "#3B82F6",
-                                            strokeWidth: 2,
-                                          }}
-                                        />
-                                      </LineChart>
+                                        {playerInfo &&
+                                          getPositionStats(
+                                            playerInfo.position_id
+                                          ).map((stat) => (
+                                            <option
+                                              key={stat.value}
+                                              value={stat.value}
+                                              className="bg-gray-700"
+                                            >
+                                              {stat.label}
+                                            </option>
+                                          ))}
+                                      </select>
                                     </div>
-                                    <div className="ml-6 mr-8 flex flex-col justify-center items-center text-center w-48">
-                                      <div className="mb-2">
-                                        <select
-                                          value={selectedStat}
-                                          onChange={(e) =>
-                                            setSelectedStat(e.target.value)
-                                          }
-                                          className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        >
-                                          {playerInfo &&
-                                            getPositionStats(
-                                              playerInfo.position_id
-                                            ).map((stat) => (
-                                              <option
-                                                key={stat.value}
-                                                value={stat.value}
-                                                className="bg-gray-700"
-                                              >
-                                                {stat.label}
-                                              </option>
-                                            ))}
-                                        </select>
-                                      </div>
-                                      <h4 className="text-lg font-semibold text-blue-400 mb-3">
-                                        {getPositionStats(
-                                          playerInfo?.position_id
-                                        )?.find(
-                                          (stat) => stat.value === selectedStat
-                                        )?.label || "Fantasy Points"}{" "}
-                                        Over Time
-                                      </h4>
-                                      <p className="text-gray-400 text-sm leading-relaxed">
-                                        {data.length} games vs{" "}
-                                        {currentWeekOpponent} (2021-2025)
-                                      </p>
-                                    </div>
+                                    <h4 className="text-lg font-semibold text-blue-400 mb-3">
+                                      {getPositionStats(
+                                        playerInfo?.position_id
+                                      )?.find(
+                                        (stat) => stat.value === selectedStat
+                                      )?.label || "Fantasy Points"}{" "}
+                                      Over Time
+                                    </h4>
+                                    <p className="text-gray-400 text-sm leading-relaxed">
+                                      {data.length} games vs{" "}
+                                      {currentWeekOpponent} (2021-2025)
+                                    </p>
                                   </div>
                                 </div>
-                              );
-                            })()}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Quick Stats Column */}
+                    <div className="lg:w-80 flex flex-col gap-4">
+                      <Card className="bg-gray-700 border-gray-600">
+                        <CardContent className="p-4">
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-blue-400">
+                              {matchupData.gamesPlayed}
+                            </div>
+                            <div className="text-gray-400 text-sm">
+                              Games vs {currentWeekOpponent}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="bg-gray-700 border-gray-600">
+                        <CardContent className="p-4">
+                          <div className="text-center">
+                            <div
+                              className={`text-2xl font-bold ${
+                                matchupData.avgFpts === "No Data"
+                                  ? "text-gray-500"
+                                  : "text-green-400"
+                              }`}
+                            >
+                              {matchupData.avgFpts}
+                            </div>
+                            <div className="text-gray-400 text-sm">
+                              Avg Fantasy Points
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="bg-gray-700 border-gray-600">
+                        <CardContent className="p-4">
+                          <div className="text-center">
+                            <div
+                              className={`text-2xl font-bold ${
+                                matchupData.bestGame === "No Data"
+                                  ? "text-gray-500"
+                                  : "text-yellow-400"
+                              }`}
+                            >
+                              {matchupData.bestGame}
+                            </div>
+                            <div className="text-gray-400 text-sm">
+                              Best Game (FPts)
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="bg-gray-700 border-gray-600">
+                        <CardContent className="p-4">
+                          <div className="text-center">
+                            <div
+                              className={`text-2xl font-bold ${
+                                matchupData.worstGame === "No Data"
+                                  ? "text-gray-500"
+                                  : "text-red-400"
+                              }`}
+                            >
+                              {matchupData.worstGame}
+                            </div>
+                            <div className="text-gray-400 text-sm">
+                              Worst Game (FPts)
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
                     </div>
-                  )}
-                </div>
-
-                {/* Quick Stats Column */}
-                <div className="lg:w-80 flex flex-col gap-4">
-                  <Card className="bg-gray-800 border-gray-700">
-                    <CardContent className="p-4">
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-blue-400">
-                          {matchupData.gamesPlayed}
-                        </div>
-                        <div className="text-gray-400 text-sm">
-                          Games vs {currentWeekOpponent}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="bg-gray-800 border-gray-700">
-                    <CardContent className="p-4">
-                      <div className="text-center">
-                        <div
-                          className={`text-2xl font-bold ${
-                            matchupData.avgFpts === "No Data"
-                              ? "text-gray-500"
-                              : "text-green-400"
-                          }`}
-                        >
-                          {matchupData.avgFpts}
-                        </div>
-                        <div className="text-gray-400 text-sm">
-                          Avg Fantasy Points
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="bg-gray-800 border-gray-700">
-                    <CardContent className="p-4">
-                      <div className="text-center">
-                        <div
-                          className={`text-2xl font-bold ${
-                            matchupData.bestGame === "No Data"
-                              ? "text-gray-500"
-                              : "text-yellow-400"
-                          }`}
-                        >
-                          {matchupData.bestGame}
-                        </div>
-                        <div className="text-gray-400 text-sm">
-                          Best Game (FPts)
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="bg-gray-800 border-gray-700">
-                    <CardContent className="p-4">
-                      <div className="text-center">
-                        <div
-                          className={`text-2xl font-bold ${
-                            matchupData.worstGame === "No Data"
-                              ? "text-gray-500"
-                              : "text-red-400"
-                          }`}
-                        >
-                          {matchupData.worstGame}
-                        </div>
-                        <div className="text-gray-400 text-sm">
-                          Worst Game (FPts)
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
             {/* Recent Performance */}
