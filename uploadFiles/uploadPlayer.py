@@ -314,4 +314,11 @@ def main():
 
 
 if __name__ == "__main__":
+    # Set UTF-8 encoding for Windows console
+    import sys
+    if sys.platform == "win32":
+        import codecs
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+        sys.stderr = codecs.getwriter("utf-8")(sys.stderr.detach())
+    
     main()

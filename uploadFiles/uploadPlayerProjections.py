@@ -257,6 +257,13 @@ def upload_player_projections(week):
         conn.close()
 
 if __name__ == "__main__":
+    # Set UTF-8 encoding for Windows console
+    import sys
+    if sys.platform == "win32":
+        import codecs
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+        sys.stderr = codecs.getwriter("utf-8")(sys.stderr.detach())
+    
     week_input = input("Enter the week number to upload projections for: ")
 
     try:
@@ -264,6 +271,6 @@ if __name__ == "__main__":
         if 1 <= week_number <= 18:  # Ensure valid week range
             upload_player_projections(week_number)
         else:
-            print("❌ Invalid week number! Please enter a number between 1 and 16.")
+            print("❌ Invalid week number! Please enter a number between 1 and 18.")
     except ValueError:
         print("❌ Invalid input! Please enter a valid number.")

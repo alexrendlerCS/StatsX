@@ -20,7 +20,6 @@ DROP TABLE IF EXISTS player_averages CASCADE;
 DROP TABLE IF EXISTS team_schedule CASCADE;
 DROP TABLE IF EXISTS qb_defensive_stats CASCADE;
 DROP TABLE IF EXISTS general_defensive_stats CASCADE;
-DROP TABLE IF EXISTS nfl_historical_stats CASCADE;
 DROP TABLE IF EXISTS player_stats CASCADE;
 DROP TABLE IF EXISTS teams CASCADE;
 DROP TABLE IF EXISTS positions CASCADE;
@@ -72,58 +71,6 @@ CREATE TABLE player_stats (
     games_played INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(player_name, team_id, week)
-);
-
--- Historical NFL stats table (2015-2025)
-CREATE TABLE nfl_historical_stats (
-    id SERIAL PRIMARY KEY,
-    player_name VARCHAR(255) NOT NULL,
-    player_id VARCHAR(50), -- Links to NFL data PlayerId
-    position VARCHAR(10) NOT NULL,
-    team VARCHAR(10) NOT NULL,
-    season INTEGER NOT NULL,
-    week INTEGER, -- NULL for season totals (2015-2020)
-    opponent VARCHAR(255),
-    
-    -- Basic Stats (matching current schema)
-    passing_yds INTEGER DEFAULT 0,
-    passing_tds INTEGER DEFAULT 0,
-    passing_int INTEGER DEFAULT 0,
-    rushing_yds INTEGER DEFAULT 0,
-    rushing_tds INTEGER DEFAULT 0,
-    receptions INTEGER DEFAULT 0,
-    receiving_yds INTEGER DEFAULT 0,
-    receiving_tds INTEGER DEFAULT 0,
-    targets INTEGER DEFAULT 0,
-    fpts DECIMAL(8,2) DEFAULT 0,
-    
-    -- Advanced NFL Data Fields
-    touch_carries INTEGER DEFAULT 0,
-    touch_receptions INTEGER DEFAULT 0,
-    total_touches INTEGER DEFAULT 0,
-    reception_percentage DECIMAL(5,2) DEFAULT 0,
-    red_zone_targets INTEGER DEFAULT 0,
-    red_zone_touches INTEGER DEFAULT 0,
-    goal_to_go INTEGER DEFAULT 0,
-    return_tds INTEGER DEFAULT 0,
-    fumble_tds INTEGER DEFAULT 0,
-    two_point_conversions INTEGER DEFAULT 0,
-    fumbles INTEGER DEFAULT 0,
-    fantasy_points_against DECIMAL(8,2) DEFAULT 0,
-    player_rank INTEGER DEFAULT 0,
-    
-    -- Projection Fields (for projected data)
-    projected_points DECIMAL(8,2) DEFAULT 0,
-    projected_rank INTEGER DEFAULT 0,
-    projection_diff DECIMAL(8,2) DEFAULT 0,
-    
-    -- Data source tracking
-    data_type VARCHAR(20) DEFAULT 'weekly', -- 'weekly', 'season', 'projected'
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Constraints
-    UNIQUE(player_name, player_id, season, week, data_type)
 );
 
 -- =====================================================
@@ -452,24 +399,6 @@ CREATE INDEX idx_player_stats_team_id ON player_stats(team_id);
 CREATE INDEX idx_player_stats_week ON player_stats(week);
 CREATE INDEX idx_player_stats_normalized_name ON player_stats(normalized_name);
 
--- Historical stats indexes
-CREATE INDEX idx_nfl_historical_player_season ON nfl_historical_stats(player_name, season);
-CREATE INDEX idx_nfl_historical_player_week ON nfl_historical_stats(player_name, season, week);
-CREATE INDEX idx_nfl_historical_position_season ON nfl_historical_stats(position, season);
-CREATE INDEX idx_nfl_historical_team_season ON nfl_historical_stats(team, season);
-CREATE INDEX idx_nfl_historical_season_week ON nfl_historical_stats(season, week);
-CREATE INDEX idx_nfl_historical_player_id ON nfl_historical_stats(player_id);
-CREATE INDEX idx_nfl_historical_data_type ON nfl_historical_stats(data_type);
-CREATE INDEX idx_nfl_historical_fpts ON nfl_historical_stats(fpts DESC);
-CREATE INDEX idx_nfl_historical_player_rank ON nfl_historical_stats(player_rank);
-CREATE INDEX idx_nfl_historical_total_touches ON nfl_historical_stats(total_touches DESC);
-CREATE INDEX idx_nfl_historical_receiving_yds ON nfl_historical_stats(receiving_yds DESC);
-CREATE INDEX idx_nfl_historical_rushing_yds ON nfl_historical_stats(rushing_yds DESC);
-CREATE INDEX idx_nfl_historical_passing_yds ON nfl_historical_stats(passing_yds DESC);
-CREATE INDEX idx_nfl_historical_position_week_fpts ON nfl_historical_stats(position, week, fpts DESC);
-CREATE INDEX idx_nfl_historical_season_position_rank ON nfl_historical_stats(season, position, player_rank);
-CREATE INDEX idx_nfl_historical_team_week ON nfl_historical_stats(team, season, week);
-
 -- Defense stats indexes
 CREATE INDEX idx_general_defensive_stats_team_id ON general_defensive_stats(team_id);
 CREATE INDEX idx_general_defensive_stats_position_id ON general_defensive_stats(position_id);
@@ -552,7 +481,6 @@ INSERT INTO positions (position_id, position_name) VALUES
 -- =====================================================
 
 COMMENT ON TABLE player_stats IS 'Main table storing individual player game statistics';
-COMMENT ON TABLE nfl_historical_stats IS 'Historical NFL player statistics from 2015-2025, including weekly stats, season totals, and projections';
 COMMENT ON TABLE general_defensive_stats IS 'Defensive statistics against RB, WR, TE positions';
 COMMENT ON TABLE qb_defensive_stats IS 'Defensive statistics specifically against QB position';
 COMMENT ON TABLE team_schedule IS 'NFL team schedule with weekly opponents';
@@ -584,7 +512,7 @@ SELECT
 FROM information_schema.columns 
 WHERE table_schema = 'public' 
     AND table_name IN (
-        'player_stats', 'nfl_historical_stats', 'teams', 'positions', 'general_defensive_stats',
+        'player_stats', 'teams', 'positions', 'general_defensive_stats',
         'qb_defensive_stats', 'team_schedule', 'player_averages',
         'defense_averages', 'defense_averages_qb', 'all_defense_averages',
         'all_defense_averages_qb', 'recent_player_stats', 'player_projections',

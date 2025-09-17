@@ -157,6 +157,13 @@ def upload_player_lines(csv_file_path, week):
 
 # Run the script
 if __name__ == "__main__":
+    # Set UTF-8 encoding for Windows console
+    import sys
+    if sys.platform == "win32":
+        import codecs
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+        sys.stderr = codecs.getwriter("utf-8")(sys.stderr.detach())
+    
     week_input = input("Enter the week number for PlayerProps.csv: ").strip()
 
     try:
