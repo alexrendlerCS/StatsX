@@ -152,4 +152,11 @@ def generate_and_store_projections():
     print(f"✅ Inserted {len(projections)} player projections.")
 
 if __name__ == "__main__":
+    import sys
+    # Set UTF-8 encoding for Windows console
+    if sys.platform == "win32":
+        import codecs
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+        sys.stderr = codecs.getwriter("utf-8")(sys.stderr.detach())
+    
     generate_and_store_projections()

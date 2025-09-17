@@ -11,7 +11,7 @@ SUPABASE_DB = os.getenv("SUPABASE_DB")
 SUPABASE_USER = os.getenv("SUPABASE_USER")
 SUPABASE_PASSWORD = os.getenv("SUPABASE_PASSWORD")
 
-CURRENT_WEEK = 17  # Update as needed
+# CURRENT_WEEK will be passed as parameter
 
 def connect_db():
     return psycopg2.connect(
@@ -26,7 +26,7 @@ def connect_db():
 def normalize_name(name):
     return name.lower().replace("-", "").replace(".", "").replace("’", "").replace("'", "").replace("`", "").strip()
 
-def generate_players_to_watch():
+def generate_players_to_watch(current_week):
     conn = connect_db()
     cursor = conn.cursor()
 
@@ -46,7 +46,7 @@ def generate_players_to_watch():
     cursor.execute("SELECT player_name, position_id, games_played FROM player_stats")
     games_played_data = cursor.fetchall()
 
-    cursor.execute("SELECT team_id, opponent_id FROM team_schedule WHERE week = %s", (CURRENT_WEEK + 1,))
+    cursor.execute("SELECT team_id, opponent_id FROM team_schedule WHERE week = %s", (current_week + 1,))
     matchups = dict(cursor.fetchall())
 
     cursor.execute("SELECT team_id, avg_passing_yards FROM defense_averages_qb")
@@ -193,4 +193,17 @@ def generate_players_to_watch():
     print(f"Inserted {len(players_to_watch)} players to watch.")
 
 if __name__ == "__main__":
-    generate_players_to_watch()
+    import sys
+    # Set UTF-8 encoding for Windows console
+    if sys.platform == "win32":
+        import codecs
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+        sys.stderr = codecs.getwriter("utf-8")(sys.stderr.detach())
+    
+    # Get week from command line argument or input
+    if len(sys.argv) > 1:
+        current_week = int(sys.argv[1])
+    else:
+        current_week = int(input("Enter the current NFL week: "))
+    
+    generate_players_to_watch(current_week)

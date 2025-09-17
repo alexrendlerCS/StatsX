@@ -14,6 +14,7 @@ import {
 import { User, Search } from "lucide-react";
 import supabase from "../supabaseClient";
 import { useState, useEffect } from "react";
+import { useCurrentWeek } from "../../hooks/useCurrentWeek";
 
 export default function PlayerStats() {
   const [playerName, setPlayerName] = useState("");
@@ -29,14 +30,18 @@ export default function PlayerStats() {
 
   // Add this state near the top
   const [weeklyLeaders, setWeeklyLeaders] = useState([]);
+  const { currentWeek, loading: weekLoading } = useCurrentWeek(); // Get current week from API
 
   // Fetch top 1 players per position (rank 1)
   useEffect(() => {
     const fetchWeeklyLeaders = async () => {
+      if (!currentWeek) return; // Wait for currentWeek to be loaded
+
       const { data, error } = await supabase
         .from("weekly_leaders")
         .select("*")
-        .eq("rank", 1); // Only rank 1 players
+        .eq("rank", 1) // Only rank 1 players
+        .eq("week", currentWeek); // Filter by current week
 
       if (error) {
         console.error("❌ Error fetching weekly leaders:", error.message);
@@ -58,7 +63,7 @@ export default function PlayerStats() {
     };
 
     fetchWeeklyLeaders();
-  }, []);
+  }, [currentWeek]);
 
   const normalizeString = (str) =>
     str
@@ -428,7 +433,7 @@ export default function PlayerStats() {
             <Card className="bg-gray-800 border-blue-500 w-full shadow-lg px-6 py-4 rounded-lg">
               <CardHeader>
                 <CardTitle className="text-blue-400 text-xl font-bold flex items-center gap-2">
-                  🏆 Best Stats of Week
+                  🏆 Best Stats of Week {currentWeek || 1}
                 </CardTitle>
               </CardHeader>
               <CardContent>

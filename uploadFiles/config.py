@@ -34,6 +34,16 @@ WEEK_DEPENDENT_SCRIPTS = {
         'week_param': 'current_week',
         'min_week': 3,  # Requires at least week 3 for 3-week lookback
         'description': 'Updates recent player stats (current week and 2 previous weeks)'
+    },
+    'generate_weekly_leaders.py': {
+        'week_param': 'command_line',
+        'script_path': '../my-app/Scripts/generate_weekly_leaders.py',
+        'description': 'Generates weekly leaders for each position'
+    },
+    'generate_players_to_watch.py': {
+        'week_param': 'command_line',
+        'script_path': '../my-app/Scripts/generate_players_to_watch.py',
+        'description': 'Generates players to watch based on performance and matchups'
     }
 }
 
@@ -58,6 +68,10 @@ PHASES = {
     'optional': {
         'scripts': ['uploadPlayerLines.py', 'uploadPlayerRecent.py'],
         'description': 'Optional/weekly data - betting lines and recent stats'
+    },
+    'frontend': {
+        'scripts': ['generate_weekly_leaders.py', 'generate_hot_cold_players.py', 'generate_players_to_watch.py', 'generate_projections.py'],
+        'description': 'Frontend data generation - weekly leaders, hot/cold players, players to watch, and projections'
     }
 }
 

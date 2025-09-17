@@ -152,4 +152,11 @@ def generate_hot_and_cold_players():
     print(f"Inserted {len(hot_players)} hot players and {len(cold_players)} cold players.")
 
 if __name__ == "__main__":
+    import sys
+    # Set UTF-8 encoding for Windows console
+    if sys.platform == "win32":
+        import codecs
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+        sys.stderr = codecs.getwriter("utf-8")(sys.stderr.detach())
+    
     generate_hot_and_cold_players()

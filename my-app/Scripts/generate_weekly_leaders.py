@@ -69,4 +69,17 @@ def generate_weekly_leaders(week):
     print(f"Inserted top players for week {week}.")
 
 if __name__ == "__main__":
-    generate_weekly_leaders(week=1)  # Replace 16 with your target week
+    import sys
+    # Set UTF-8 encoding for Windows console
+    if sys.platform == "win32":
+        import codecs
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+        sys.stderr = codecs.getwriter("utf-8")(sys.stderr.detach())
+    
+    # Get week from command line argument or input
+    if len(sys.argv) > 1:
+        week = int(sys.argv[1])
+    else:
+        week = int(input("Enter the current NFL week: "))
+    
+    generate_weekly_leaders(week=week)

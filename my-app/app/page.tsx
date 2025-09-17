@@ -8,6 +8,7 @@ import Link from "next/link";
 import { BarChart3, TrendingUp, Users, Shield, Send } from "lucide-react";
 import { useState, useEffect } from "react";
 import supabase from "./supabaseClient";
+import { useCurrentWeek } from "../hooks/useCurrentWeek";
 
 export default function Home() {
   const [feedback, setFeedback] = useState(""); // For feedback input
@@ -24,8 +25,8 @@ export default function Home() {
   const [picksError, setPicksError] = useState(""); // For picks error message
   const [overUnder, setOverUnder] = useState(""); // Over/Under selection
   const [suggestions, setSuggestions] = useState([]); // Player name suggestions
-  const currentWeek = 1; // Current NFL Week (matchups) - Updated for 2025 season
-  const previousWeek = currentWeek; // Use same week for 2025 season start
+
+  const { currentWeek, loading: weekLoading } = useCurrentWeek(); // Get current week from API
   const [allPlayersToWatch, setAllPlayersToWatch] = useState([]);
 
   const [performanceFilter, setPerformanceFilter] = useState<
@@ -76,7 +77,7 @@ export default function Home() {
         const { data, error } = await supabase
           .from("weekly_leaders")
           .select("week, player_name, position_id, stat_value, matchup, rank")
-          .eq("week", previousWeek);
+          .eq("week", currentWeek);
 
         if (error) throw error;
 
@@ -109,7 +110,7 @@ export default function Home() {
     };
 
     fetchWeeklyLeaders();
-  }, [previousWeek]);
+  }, [currentWeek]);
 
   const [hotPlayers, setHotPlayers] = useState([]);
   const [coldPlayers, setColdPlayers] = useState([]);
@@ -502,7 +503,7 @@ export default function Home() {
           <Card className="bg-gray-800 border-blue-400">
             <CardHeader>
               <CardTitle className="text-blue-400 text-center">
-                Leaders for Week 1
+                Leaders for Week {currentWeek || 1}
               </CardTitle>
               {/* Position Tabs */}
               <div className="flex justify-center space-x-1 mt-4">

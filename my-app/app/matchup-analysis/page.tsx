@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import supabase from "../supabaseClient";
 import { useState } from "react";
+import { useCurrentWeek } from "../../hooks/useCurrentWeek";
 
 export default function MatchupAnalysis() {
   const [playerName, setPlayerName] = useState("");
@@ -31,13 +32,13 @@ export default function MatchupAnalysis() {
   // Matchup data states
   const [matchupData, setMatchupData] = useState(null);
   const [playerInfo, setPlayerInfo] = useState(null);
-  const [currentWeekOpponent, setCurrentWeekOpponent] = useState("");
+  const [upcomingWeekOpponent, setUpcomingWeekOpponent] = useState("");
   const [historicalMatchups, setHistoricalMatchups] = useState([]);
   const [recentPerformance, setRecentPerformance] = useState([]);
   const [selectedStat, setSelectedStat] = useState("fpts");
   const [selectedRecentStat, setSelectedRecentStat] = useState("fpts");
 
-  const currentWeek = 2; // Set to week 2 as requested
+  const { currentWeek, loading: weekLoading } = useCurrentWeek(); // Get current week from API
 
   // Get position-specific stats for dropdown
   const getPositionStats = (position) => {
@@ -100,17 +101,18 @@ export default function MatchupAnalysis() {
     }
   };
 
-  const getPlayerWeek2Opponent = async (teamId) => {
+  const getPlayerUpcomingWeekOpponent = async (teamId) => {
     try {
-      // Get the schedule for week 2
+      // Get the schedule for upcoming week (current week + 1)
+      const upcomingWeek = currentWeek + 1;
       const { data: schedule } = await supabase
         .from("team_schedule")
         .select("opponent_id")
         .eq("team_id", teamId)
-        .eq("week", currentWeek);
+        .eq("week", upcomingWeek);
 
       if (!schedule || schedule.length === 0) {
-        throw new Error("Schedule not found for week 2");
+        throw new Error(`Schedule not found for week ${upcomingWeek}`);
       }
 
       return schedule[0].opponent_id;
@@ -147,17 +149,17 @@ export default function MatchupAnalysis() {
       const player = playerStats[0];
       setPlayerInfo(player);
 
-      // Get week 2 opponent
-      const opponent = await getPlayerWeek2Opponent(player.team_id);
+      // Get upcoming week opponent
+      const opponent = await getPlayerUpcomingWeekOpponent(player.team_id);
       if (!opponent) {
-        setError("Could not find week 2 opponent");
+        setError(`Could not find week ${currentWeek + 1} opponent`);
         setLoading(false);
         return;
       }
 
       // Clean opponent name (remove @ symbol)
       const cleanOpponent = opponent.replace("@", "");
-      setCurrentWeekOpponent(cleanOpponent);
+      setUpcomingWeekOpponent(cleanOpponent);
 
       // Get historical matchups against this opponent (regardless of team)
       // Search for both home and away games (@CLE and CLE)
@@ -379,7 +381,8 @@ export default function MatchupAnalysis() {
             Matchup Analysis
           </h1>
           <p className="text-gray-400 text-lg">
-            Analyze player performance against their Week {currentWeek} opponent
+            Analyze player performance against their Week {currentWeek + 1}{" "}
+            opponent
           </p>
           <p className="text-gray-500 text-sm mt-2">
             Historical data available: 2021-2025 seasons
@@ -445,7 +448,8 @@ export default function MatchupAnalysis() {
               <CardHeader>
                 <CardTitle className="text-xl text-blue-400 flex items-center">
                   <Calendar className="w-6 h-6 mr-2" />
-                  {playerName} vs {currentWeekOpponent} - Week {currentWeek}
+                  {playerName} vs {upcomingWeekOpponent} - Week{" "}
+                  {currentWeek + 1}
                 </CardTitle>
                 <p className="text-gray-400">
                   {playerInfo.position_id} • {playerInfo.team_id}
@@ -459,7 +463,7 @@ export default function MatchupAnalysis() {
                 <CardHeader>
                   <CardTitle className="text-xl text-blue-400 flex items-center">
                     <TrendingUp className="w-6 h-6 mr-2" />
-                    Historical Performance vs {currentWeekOpponent}
+                    Historical Performance vs {upcomingWeekOpponent}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -593,7 +597,7 @@ export default function MatchupAnalysis() {
                                     </h4>
                                     <p className="text-gray-400 text-sm leading-relaxed">
                                       {data.length} games vs{" "}
-                                      {currentWeekOpponent} (2021-2025)
+                                      {upcomingWeekOpponent} (2021-2025)
                                     </p>
                                   </div>
                                 </div>
@@ -613,7 +617,7 @@ export default function MatchupAnalysis() {
                               {matchupData.gamesPlayed}
                             </div>
                             <div className="text-gray-400 text-sm">
-                              Games vs {currentWeekOpponent}
+                              Games vs {upcomingWeekOpponent}
                             </div>
                           </div>
                         </CardContent>
@@ -946,9 +950,9 @@ export default function MatchupAnalysis() {
                   </h3>
                   <p className="text-gray-500 mb-4">
                     No previous games found between {playerName} and{" "}
-                    {currentWeekOpponent} in our historical records (2021-2025).
-                    This could be their first matchup in recent seasons, or the
-                    data is not available.
+                    {upcomingWeekOpponent} in our historical records
+                    (2021-2025). This could be their first matchup in recent
+                    seasons, or the data is not available.
                   </p>
                   <div className="bg-gray-700 rounded-lg p-4 text-left">
                     <h4 className="text-blue-400 font-semibold mb-2">
@@ -959,7 +963,7 @@ export default function MatchupAnalysis() {
                         • Check their recent performance (last 4 weeks) below
                       </li>
                       <li>
-                        • Consider {currentWeekOpponent}&apos;s defensive stats
+                        • Consider {upcomingWeekOpponent}&apos;s defensive stats
                       </li>
                       <li>• Look at {playerName}&apos;s season averages</li>
                       <li>• Review weather conditions and game script</li>
