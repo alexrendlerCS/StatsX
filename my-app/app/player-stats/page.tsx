@@ -30,7 +30,7 @@ export default function PlayerStats() {
 
   // Add this state near the top
   const [weeklyLeaders, setWeeklyLeaders] = useState([]);
-  const { currentWeek, loading: weekLoading } = useCurrentWeek(); // Get current week from API
+  const { currentWeek } = useCurrentWeek(); // Get current week from API
 
   // Fetch top 1 players per position (rank 1)
   useEffect(() => {

@@ -38,7 +38,7 @@ export default function MatchupAnalysis() {
   const [selectedStat, setSelectedStat] = useState("fpts");
   const [selectedRecentStat, setSelectedRecentStat] = useState("fpts");
 
-  const { currentWeek, loading: weekLoading } = useCurrentWeek(); // Get current week from API
+  const { currentWeek } = useCurrentWeek(); // Get current week from API
 
   // Get position-specific stats for dropdown
   const getPositionStats = (position) => {
