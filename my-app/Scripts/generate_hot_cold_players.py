@@ -45,10 +45,11 @@ def generate_hot_and_cold_players():
     """)
     season_averages = cursor.fetchall()
 
-    # Fetch games played from player_stats
+    # Calculate actual games played by counting records per player
     cursor.execute("""
-        SELECT player_name, position_id, games_played
-        FROM player_stats
+        SELECT player_name, position_id, COUNT(*) as actual_games_played 
+        FROM player_stats 
+        GROUP BY player_name, position_id
     """)
     games_played_data = cursor.fetchall()
 
@@ -153,7 +154,7 @@ def generate_hot_and_cold_players():
         min_season_avg = 5 if stat_name == "receiving" else 10 if stat_name == "rushing" else 30  # Lower thresholds for different positions
         min_recent_avg = 1 if stat_name == "receiving" else 2 if stat_name == "rushing" else 5
         
-        if season_avg < min_season_avg or recent_avg <= min_recent_avg or games_played <= 1:
+        if season_avg < min_season_avg or recent_avg <= min_recent_avg or games_played < 4:
             filtered_out_reasons["low_volume"] += 1
             continue
 

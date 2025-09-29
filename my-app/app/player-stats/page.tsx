@@ -37,6 +37,8 @@ export default function PlayerStats() {
     const fetchWeeklyLeaders = async () => {
       if (!currentWeek) return; // Wait for currentWeek to be loaded
 
+      console.log("🔍 Fetching weekly leaders for week:", currentWeek);
+
       const { data, error } = await supabase
         .from("weekly_leaders")
         .select("*")
@@ -47,6 +49,8 @@ export default function PlayerStats() {
         console.error("❌ Error fetching weekly leaders:", error.message);
         return;
       }
+
+      console.log("📊 Weekly leaders data:", data);
 
       // Deduplicate by player_name and position_id
       const seenPlayers = new Set();

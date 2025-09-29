@@ -49,7 +49,12 @@ def generate_players_to_watch(current_week):
     """)
     season = cursor.fetchall()
 
-    cursor.execute("SELECT player_name, position_id, games_played FROM player_stats")
+    # Calculate actual games played by counting records per player
+    cursor.execute("""
+        SELECT player_name, position_id, COUNT(*) as actual_games_played 
+        FROM player_stats 
+        GROUP BY player_name, position_id
+    """)
     games_played_data = cursor.fetchall()
 
     cursor.execute("SELECT team_id, opponent_id FROM team_schedule WHERE week = %s", (current_week + 1,))
@@ -170,9 +175,9 @@ def generate_players_to_watch(current_week):
                 print(f"  FILTERED: recent average too low ({player_avgs[stat_used]:.1f} <= 5)")
             debug_counts["low_volume"] += 1
             continue
-        if games_played <= 1:  # Only filter out players with 1 or fewer games
+        if games_played < 4:  # Require at least 4 games for reliable averages
             if debug_counts["processed"] <= 5:
-                print(f"  FILTERED: games played too low ({games_played} <= 1)")
+                print(f"  FILTERED: games played too low ({games_played} < 4)")
             debug_counts["low_volume"] += 1
             continue
 
