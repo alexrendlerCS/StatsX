@@ -32,10 +32,16 @@ def generate_hot_and_cold_players():
     """)
     recent_data = cursor.fetchall()
 
-    # Fetch season averages
+    # Fetch season averages (calculate from ALL weeks in player_stats)
     cursor.execute("""
-        SELECT player_name, position_id, avg_passing_yards, avg_rushing_yards, avg_receiving_yards
-        FROM player_averages
+        SELECT 
+            player_name, 
+            position_id, 
+            AVG(passing_yards) as avg_passing_yards,
+            AVG(rushing_yards) as avg_rushing_yards, 
+            AVG(receiving_yards) as avg_receiving_yards
+        FROM player_stats
+        GROUP BY player_name, position_id
     """)
     season_averages = cursor.fetchall()
 
@@ -49,15 +55,15 @@ def generate_hot_and_cold_players():
     # Lookup maps
     averages_map = {
         (row[0], row[1]): {
-            "avg_passing_yards": row[2] or 0,
-            "avg_rushing_yards": row[3] or 0,
-            "avg_receiving_yards": row[4] or 0,
+            "avg_passing_yards": float(row[2]) if row[2] else 0,
+            "avg_rushing_yards": float(row[3]) if row[3] else 0,
+            "avg_receiving_yards": float(row[4]) if row[4] else 0,
         }
         for row in season_averages
     }
 
     games_played_map = {
-        (row[0], row[1]): row[2] or 0
+        (row[0], row[1]): int(row[2]) if row[2] else 0
         for row in games_played_data
     }
 
@@ -71,16 +77,25 @@ def generate_hot_and_cold_players():
                 "rushing_yards": [],
                 "receiving_yards": []
             }
-        player_stats[key]["passing_yards"].append(pass_yds or 0)
-        player_stats[key]["rushing_yards"].append(rush_yds or 0)
-        player_stats[key]["receiving_yards"].append(recv_yds or 0)
+        player_stats[key]["passing_yards"].append(float(pass_yds) if pass_yds else 0)
+        player_stats[key]["rushing_yards"].append(float(rush_yds) if rush_yds else 0)
+        player_stats[key]["receiving_yards"].append(float(recv_yds) if recv_yds else 0)
 
     hot_players = []
     cold_players = []
+    
+    debug_count = 0
+    filtered_out_reasons = {
+        "missing_data": 0,
+        "low_volume": 0,
+        "low_change": 0,
+        "passed_filters": 0
+    }
 
     for key, values in player_stats.items():
         name, position = key
         if key not in averages_map or key not in games_played_map:
+            filtered_out_reasons["missing_data"] += 1
             continue
 
         avg_stats = averages_map[key]
@@ -107,8 +122,19 @@ def generate_hot_and_cold_players():
             "receiving": (deltas["receiving"] / avg_stats["avg_receiving_yards"]) * 100 if avg_stats["avg_receiving_yards"] else 0,
         }
 
-        # Best stat change
-        stat_name, change = max(changes.items(), key=lambda x: abs(x[1]))
+        # Use position-appropriate primary stat instead of best change
+        primary_stats = {
+            "QB": "passing",
+            "RB": "rushing", 
+            "WR": "receiving",
+            "TE": "receiving",
+            "K": "passing",  # Fallback
+            "DEF": "passing"  # Fallback
+        }
+        
+        stat_name = primary_stats.get(position, "passing")
+        change = changes[stat_name]
+        
         stat_label = {
             "passing": "Passing Yds",
             "rushing": "Rushing Yds",
@@ -118,11 +144,27 @@ def generate_hot_and_cold_players():
         recent_avg = recent[stat_name]
         season_avg = avg_stats[f"avg_{stat_name}_yards"]
 
-        # Filter out low volume or inactive players
-        if season_avg < 15 or recent_avg <= 5 or games_played <= 3:
+        # Debug: Print first few players to see what's happening
+        if debug_count < 5:
+            print(f"Debug - {name} ({position}): recent_avg={recent_avg:.2f}, season_avg={season_avg:.2f}, change={change:.2f}%, games={games_played}")
+            debug_count += 1
+
+        # Filter out low volume or inactive players (adjusted thresholds)
+        min_season_avg = 5 if stat_name == "receiving" else 10 if stat_name == "rushing" else 30  # Lower thresholds for different positions
+        min_recent_avg = 1 if stat_name == "receiving" else 2 if stat_name == "rushing" else 5
+        
+        if season_avg < min_season_avg or recent_avg <= min_recent_avg or games_played <= 1:
+            filtered_out_reasons["low_volume"] += 1
             continue
 
         row = (name, position, stat_label, recent_avg, season_avg, change)
+
+        # Only include players with meaningful changes (at least 20% difference)
+        if abs(change) < 20:
+            filtered_out_reasons["low_change"] += 1
+            continue
+        
+        filtered_out_reasons["passed_filters"] += 1
 
         if change > 0:
             hot_players.append(row)
@@ -149,6 +191,14 @@ def generate_hot_and_cold_players():
     cursor.close()
     conn.close()
 
+    print(f"Processed {len(player_stats)} players from recent stats.")
+    print(f"Found {len(averages_map)} players in season averages.")
+    print(f"Found {len(games_played_map)} players with games played data.")
+    print(f"Filter results:")
+    print(f"  - Missing data: {filtered_out_reasons['missing_data']}")
+    print(f"  - Low volume: {filtered_out_reasons['low_volume']}")
+    print(f"  - Low change (<10%): {filtered_out_reasons['low_change']}")
+    print(f"  - Passed filters: {filtered_out_reasons['passed_filters']}")
     print(f"Inserted {len(hot_players)} hot players and {len(cold_players)} cold players.")
 
 if __name__ == "__main__":

@@ -72,6 +72,9 @@ export default function Home() {
   });
 
   useEffect(() => {
+    // Don't fetch if currentWeek is not loaded yet
+    if (weekLoading || !currentWeek) return;
+    
     const fetchWeeklyLeaders = async () => {
       try {
         const { data, error } = await supabase
@@ -110,7 +113,7 @@ export default function Home() {
     };
 
     fetchWeeklyLeaders();
-  }, [currentWeek]);
+  }, [currentWeek, weekLoading]);
 
   const [hotPlayers, setHotPlayers] = useState([]);
   const [coldPlayers, setColdPlayers] = useState([]);
@@ -950,11 +953,11 @@ export default function Home() {
                       </p>
                       <p
                         className={`inline-block px-2 py-1 text-sm font-bold rounded-full text-white ${
-                          player.matchup_type === "Great Matchup"
-                            ? "bg-green-900"
-                            : player.matchup_type === "Good Matchup"
+                          player.matchup_type.includes("Great Matchup")
+                            ? "bg-green-800"
+                            : player.matchup_type.includes("Good Matchup")
                             ? "bg-green-600"
-                            : "bg-red-400"
+                            : "bg-red-500"
                         }`}
                       >
                         {player.matchup_type}
