@@ -151,7 +151,7 @@ def generate_hot_and_cold_players():
             debug_count += 1
 
         # Filter out low volume or inactive players (adjusted thresholds)
-        min_season_avg = 5 if stat_name == "receiving" else 10 if stat_name == "rushing" else 30  # Lower thresholds for different positions
+        min_season_avg = 10 if stat_name == "receiving" else 10 if stat_name == "rushing" else 30  # Minimum 10 yards for receiving/rushing, 30 for passing
         min_recent_avg = 1 if stat_name == "receiving" else 2 if stat_name == "rushing" else 5
         
         if season_avg < min_season_avg or recent_avg <= min_recent_avg or games_played < 4:
