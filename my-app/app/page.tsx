@@ -80,7 +80,7 @@ export default function Home() {
         const { data, error } = await supabase
           .from("weekly_leaders")
           .select("week, player_name, position_id, stat_value, matchup, rank")
-          .eq("week", currentWeek);
+          .eq("week", currentWeek - 1);
 
         if (error) throw error;
 
@@ -506,7 +506,7 @@ export default function Home() {
           <Card className="bg-gray-800 border-blue-400">
             <CardHeader>
               <CardTitle className="text-blue-400 text-center">
-                Leaders for Week {currentWeek || 1}
+                Leaders for Week {currentWeek ? currentWeek - 1 : 1}
               </CardTitle>
               {/* Position Tabs */}
               <div className="flex justify-center space-x-1 mt-4">

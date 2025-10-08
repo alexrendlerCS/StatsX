@@ -158,18 +158,28 @@ def generate_hot_and_cold_players():
             filtered_out_reasons["low_volume"] += 1
             continue
 
-        row = (name, position, stat_label, recent_avg, season_avg, change)
+        # Use absolute difference instead of percentage
+        absolute_change = recent_avg - season_avg
+        
+        row = (name, position, stat_label, recent_avg, season_avg, absolute_change)
 
-        # Only include players with meaningful changes (at least 20% difference)
-        if abs(change) < 20:
+        # Position-specific minimum absolute changes to account for different scales
+        if position == "QB":
+            min_absolute_change = 40  # QBs need 50+ yard improvement (they throw for 200-300+ yards)
+        elif position == "RB":
+            min_absolute_change = 20  # RBs need 20+ yard improvement (rushing yards typically 40-120)
+        else:  # WR/TE
+            min_absolute_change = 15  # WRs/TEs need 15+ yard improvement (receiving yards typically 30-100)
+            
+        if abs(absolute_change) < min_absolute_change:
             filtered_out_reasons["low_change"] += 1
             continue
         
         filtered_out_reasons["passed_filters"] += 1
 
-        if change > 0:
+        if absolute_change > 0:
             hot_players.append(row)
-        elif change < 0:
+        elif absolute_change < 0:
             cold_players.append(row)
 
     # Refresh DB
