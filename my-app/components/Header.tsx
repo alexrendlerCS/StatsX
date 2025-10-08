@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, User, Shield, Home, Target } from "lucide-react";
+import { BarChart3, User, Shield, Home, Target, Brain } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 export default function Header() {
@@ -76,6 +76,17 @@ export default function Header() {
                 >
                   <Target className="w-5 h-5" />
                   <span>Matchup</span>
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/ai-insights"
+                  className={`flex items-center space-x-1 transition-colors ${isActive(
+                    "/ai-insights"
+                  )}`}
+                >
+                  <Brain className="w-5 h-5" />
+                  <span>AI Insights</span>
                 </Link>
               </li>
             </ul>
