@@ -290,7 +290,7 @@ def upload_to_database(player_data):
 
 def main():
     season = "2025REG"  # Current season
-    current_week = 5  # Set current week to 2
+    current_week = 6  # Set current week to 2
 
     conn = connect_db()
     cursor = conn.cursor()

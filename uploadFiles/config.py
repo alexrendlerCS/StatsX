@@ -5,7 +5,7 @@ Update the CURRENT_WEEK here to easily change the default week for all uploads.
 
 # Current NFL Week (1-18)
 # Update this value to change the default week for all uploads
-CURRENT_WEEK = 5
+CURRENT_WEEK = 7
 
 # Default configuration for upload phases
 DEFAULT_CONFIG = {

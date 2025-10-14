@@ -64,7 +64,14 @@ export async function queryOllama(
     });
 
     if (!response.ok) {
-      throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+      // Attempt to include any body returned by the server to help debugging (404s often include hints)
+      let bodyText = '';
+      try {
+        bodyText = await response.text();
+      } catch (e) {
+        bodyText = '<could not read response body>';
+      }
+      throw new Error(`Ollama API error: ${response.status} ${response.statusText} - ${bodyText}`);
     }
 
     const data: OllamaResponse = await response.json();
@@ -131,11 +138,20 @@ Please provide a helpful response based on NFL statistics and fantasy football i
  */
 export async function checkOllamaHealth(): Promise<boolean> {
   try {
-    const response = await fetch(`${ollamaConfig.baseUrl}/api/tags`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(5000), // 5 second timeout for health check
-    });
-    return response.ok;
+    // Try the common endpoints Ollama exposes. Some versions use /api/tags, others /api/models
+    const candidates = ['/api/tags', '/api/models', '/api/list'];
+    for (const path of candidates) {
+      try {
+        const resp = await fetch(`${ollamaConfig.baseUrl}${path}`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(3000),
+        });
+        if (resp.ok) return true;
+      } catch (e) {
+        // continue to next candidate
+      }
+    }
+    return false;
   } catch (error) {
     console.log('Ollama health check failed:', error);
     return false;
@@ -148,11 +164,25 @@ export async function checkOllamaHealth(): Promise<boolean> {
  */
 export async function getAvailableModels(): Promise<string[]> {
   try {
-    const response = await fetch(`${ollamaConfig.baseUrl}/api/tags`);
-    if (!response.ok) throw new Error('Failed to fetch models');
-    
-    const data = await response.json();
-    return data.models?.map((model: any) => model.name) || [];
+    // Try multiple endpoints and handle a couple of response shapes
+    const tryEndpoints = [`${ollamaConfig.baseUrl}/api/tags`, `${ollamaConfig.baseUrl}/api/models`];
+    for (const url of tryEndpoints) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) continue;
+        const data = await response.json();
+        // /api/tags -> { models: [{ name: 'llama2' }, ...] }
+        if (Array.isArray(data.models)) return data.models.map((m: any) => m.name);
+        // /api/models -> maybe returns an array of strings or objects
+        if (Array.isArray(data)) {
+          if (typeof data[0] === 'string') return data as string[];
+          if (data[0]?.name) return data.map((m: any) => m.name);
+        }
+      } catch (e) {
+        // ignore and try next
+      }
+    }
+    throw new Error('Failed to fetch models from Ollama');
   } catch (error) {
     console.error('Error fetching available models:', error);
     return [];

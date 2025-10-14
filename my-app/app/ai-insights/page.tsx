@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Send, Bot, User, Loader2 } from 'lucide-react';
+import OllamaStatusBadge from '@/components/OllamaStatusBadge';
 
 interface Message {
   id: string;
@@ -55,7 +56,7 @@ export default function AIInsightsPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: inputMessage }),
+        body: JSON.stringify({ messages: [{ role: 'user', content: inputMessage }] }),
       });
 
       if (!response.ok) {
@@ -99,17 +100,19 @@ export default function AIInsightsPage() {
     <div className="min-h-screen bg-gray-900 text-gray-100">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-blue-400 mb-2 flex items-center justify-center">
-            <Bot className="w-10 h-10 mr-3" />
-            AI Insights
-          </h1>
-          <p className="text-gray-400 text-lg">
-            Chat with our AI assistant to get intelligent insights about NFL statistics
-          </p>
-          <p className="text-gray-500 text-sm mt-2">
-            Powered by advanced AI for player performance, matchup analysis, and fantasy recommendations
-          </p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold text-blue-400 mb-2 flex items-center">
+              <Bot className="w-10 h-10 mr-3" />
+              AI Insights
+            </h1>
+            <p className="text-gray-400 text-lg">
+              Chat with our AI assistant to get intelligent insights about NFL statistics
+            </p>
+          </div>
+          <div>
+            <OllamaStatusBadge />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
