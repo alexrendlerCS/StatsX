@@ -8,7 +8,12 @@
     "build-no-check": "next build && tsc --noEmit",
     "start": "next start",
     "vercel-build": "next build",
-    "lint": "next lint"
+    "lint": "next lint",
+    "setup-vectors": "node setup-vectors.js",
+    "vectors:init": "node setup-vectors.js init",
+    "vectors:populate": "node setup-vectors.js populate",
+    "vectors:test": "node setup-vectors.js test",
+    "vectors:status": "node setup-vectors.js status"
   },
   "dependencies": {
     "@radix-ui/react-select": "^2.1.3",

@@ -50,12 +50,12 @@ export default function Home() {
     try {
       const { data, error } = await supabase
         .from("teams")
-        .select("team_id, team_name");
+        .select("team_id, full_name");
       if (error) throw error;
 
-      // Map team_id to team_name for quick lookup
+      // Map team_id to full_name for quick lookup
       const teamNameMap = data.reduce((acc, team) => {
-        acc[team.team_id] = team.team_name;
+        acc[team.team_id] = team.full_name;
         return acc;
       }, {});
 

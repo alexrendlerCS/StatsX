@@ -631,13 +631,13 @@ export default function DefenseAnalysis() {
   const fetchTeamNames = async () => {
     const { data, error } = await supabase
       .from("teams")
-      .select("team_id, team_name");
+      .select("team_id, full_name");
     if (error) {
       console.error("Error fetching team names:", error.message);
       return;
     }
     const teamMap = data.reduce((acc, team) => {
-      acc[team.team_id] = team.team_name;
+      acc[team.team_id] = team.full_name;
       return acc;
     }, {});
     setTeamNames(teamMap);
