@@ -217,6 +217,8 @@ export async function POST(req: NextRequest) {
     }
 
     let rows: any[] | null = null;
+    let sourceTable: string | null = null;
+    let returnedSeason: number | null = null;
     for (const t of statsTables) {
       const fetched = await tryFetchFromTable(t);
       if (fetched && (fetched as any).error) {
@@ -231,6 +233,10 @@ export async function POST(req: NextRequest) {
 
       if (fetched && Array.isArray((fetched as any).data) && (fetched as any).data.length > 0) {
         rows = (fetched as any).data;
+        sourceTable = t;
+        // attempt to infer season from first row if present
+        const first = rows[0] as any;
+        if (first && typeof first.season === 'number') returnedSeason = first.season;
         break;
       }
     }
@@ -239,8 +245,63 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No game rows found for player' }, { status: 404 });
     }
 
-    // Return rows as-is; callers can adapt to available fields.
-    return NextResponse.json({ playerId: playerRow.id, rows });
+    // Determine player's team for matchup lookup. Prefer team_id from rows if present.
+    let playerTeamId: string | null = null;
+    try {
+      if (rows && rows.length > 0 && rows[0].team_id) playerTeamId = rows[0].team_id;
+      else {
+        // fallback: try to read from player_list or player_stats by id
+        try {
+          const pl = await supabase.from('player_stats').select('team_id').eq('player_id', playerRow.id).limit(1).maybeSingle();
+          if (pl?.data && pl.data.team_id) playerTeamId = pl.data.team_id;
+        } catch (e) {
+          // ignore
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    let opponentId: string | null = null;
+    let opponentDefense: any = null;
+    try {
+      const cw = Number(process.env.CURRENT_WEEK || (process.env.NEXT_PUBLIC_CURRENT_WEEK || 0)) || 0;
+      // prefer config file if available
+      let configWeek = cw;
+      try {
+        const cfg = require('@/../../my-app/config/current-week.json');
+        if (cfg?.currentWeek) configWeek = Number(cfg.currentWeek);
+      } catch (e) {
+        // ignore
+      }
+      const weekToCheck = configWeek || cw || 0;
+      if (playerTeamId && weekToCheck) {
+        try {
+          const sch = await supabase.from('team_schedule').select('opponent_id').eq('team_id', playerTeamId).eq('week', weekToCheck).maybeSingle();
+          if (sch?.data && sch.data.opponent_id) opponentId = sch.data.opponent_id;
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // fetch defense_averages for opponent and player's position
+      if (opponentId) {
+        const pos = rows && rows[0] && rows[0].position_id ? rows[0].position_id : null;
+        if (pos) {
+          try {
+            const def = await supabase.from('defense_averages').select('*').eq('team_id', opponentId).eq('position_id', pos).maybeSingle();
+            if (def?.data) opponentDefense = def.data;
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // Return rows as-is plus the source table (so callers know where the data came from)
+    return NextResponse.json({ playerId: playerRow.id, rows, sourceTable, returnedSeason, playerTeamId, opponentId, opponentDefense });
   } catch (err: any) {
     console.error('get-player-stats error:', err?.message || err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

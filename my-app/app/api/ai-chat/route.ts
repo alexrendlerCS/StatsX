@@ -97,12 +97,55 @@ export async function POST(request: NextRequest) {
     // Call tool
     const toolResult = await spec.call(validated.args);
 
-    // Follow-up: feed tool result back for final answer
+    // If the tool returned candidate results (e.g., name resolution), forward them
+    // directly to the client so the UI can present a disambiguation flow.
+    try {
+      const maybeData = (toolResult as any)?.data;
+      if (maybeData && maybeData.candidates && Array.isArray(maybeData.candidates) && maybeData.candidates.length > 0) {
+        return NextResponse.json({ candidates: maybeData.candidates, debug: { toolCall, toolResult } });
+      }
+    } catch (e) {
+      // ignore and continue to follow-up behavior
+    }
+
+    // If get_player_stats returned not found / empty, attempt to call resolve-player to get candidates
+    try {
+      const notFound = (toolResult as any)?.error?.message === 'Player not found' || (toolResult as any)?.data?.error === 'Player not found';
+      if (notFound && toolCall.tool === 'get_player_stats') {
+        // call resolve-player endpoint
+        try {
+          const base = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || `http://localhost:3000`;
+          const url = new URL('/api/tools/resolve-player', base).toString();
+          const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerName: toolCall.args?.playerName }) });
+          const j = await r.json();
+          if (j?.candidates && Array.isArray(j.candidates) && j.candidates.length > 0) {
+            return NextResponse.json({ candidates: j.candidates, debug: { toolCall, toolResult, resolve: j } });
+          }
+        } catch (e) {
+          // ignore and continue
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // Follow-up: feed tool result back for final answer.
+    // Provide a strict instruction block that tells the LLM to rely on server-side
+    // numeric summaries (toolSummary) verbatim and NOT to invent, extrapolate, or
+    // reuse historical memory. This helps prevent the model from asserting wrong
+    // counts (e.g., "7 TDs") when the DB shows different numbers.
+    const serverSummary = (toolResult as any)?.data ? ((toolResult as any).data) : null;
+    const summaryBlock = (toolResult as any)?.toolSummary
+      ? `SERVER_SUMMARY: ${JSON.stringify((toolResult as any).toolSummary)}`
+      : serverSummary
+      ? `TOOL_DATA_KEYS: ${Object.keys(serverSummary).join(', ')}. Use the data block below if needed.`
+      : 'NO_TOOL_SUMMARY_AVAILABLE';
+
     const followInput = [
       { role: 'system', content: SYSTEM },
       ...messages,
       { role: 'assistant', content: draft },
-      { role: 'user', content: `TOOL RESULT: ${JSON.stringify(toolResult)}. Please answer concisely.` },
+      { role: 'user', content: `You have access to authoritative database results in the block below. When answering, follow these rules strictly:\n1) Use the SERVER_SUMMARY numbers verbatim when present (do not alter or round them).\n2) Do NOT state any numeric statistic unless it appears in SERVER_SUMMARY or TOOL_DATA. If you must, say you don't know.\n3) If candidates or ambiguity exist, ask the user to disambiguate.\n4) Keep answers concise and cite which table/source the numbers came from (toolData.source or 'supabase').\n\n${summaryBlock}\n\nTOOL_DATA: ${JSON.stringify((toolResult as any).data ?? {})}\n\nPlease produce a short, factual answer using only the authoritative data.` },
     ];
 
     let final: string;
@@ -113,12 +156,55 @@ export async function POST(request: NextRequest) {
       final = `Tool returned: ${JSON.stringify(toolResult)}`;
     }
 
-    // If this was a dev simulation, include debug info so tests can inspect tool results
-    if (simulateDraft !== undefined) {
-      return NextResponse.json({ message: { role: 'assistant', content: final }, debug: { toolCall, toolResult } });
+    // Build response payload and include tool result/data so frontend can render structured output.
+    const payload: any = { message: { role: 'assistant', content: final } };
+    if (toolResult) {
+      payload.toolResult = toolResult;
+      if ((toolResult as any).data !== undefined) payload.toolData = (toolResult as any).data;
+
+      // If tool returned rows, compute a small authoritative summary (server-side) so the UI/LLM
+      // can rely on DB aggregates instead of model memory.
+      try {
+        const rows = (toolResult as any).data?.rows;
+        if (Array.isArray(rows) && rows.length > 0) {
+          const games = rows.length;
+          let totalRush = 0;
+          let totalRushTds = 0;
+          let totalRec = 0;
+          let totalRecTds = 0;
+          for (const r of rows) {
+            const ry = Number(r.rushing_yards ?? r.rush_yds ?? r.rushing_yards ?? 0) || 0;
+            const rtd = Number(r.rushing_tds ?? r.rushing_tds ?? r.td ?? 0) || 0;
+            const rec = Number(r.receptions ?? r.receptions ?? 0) || 0;
+            const rectd = Number(r.receiving_tds ?? r.receiving_tds ?? 0) || 0;
+            totalRush += ry;
+            totalRushTds += rtd;
+            totalRec += rec;
+            totalRecTds += rectd;
+          }
+          const avgRushPerGame = games > 0 ? +(totalRush / games).toFixed(1) : 0;
+          payload.toolSummary = {
+            games,
+            totalRushingYards: totalRush,
+            totalRushingTds: totalRushTds,
+            avgRushingYardsPerGame: avgRushPerGame,
+            totalReceptions: totalRec,
+            totalReceivingTds: totalRecTds,
+            source: (toolResult as any).meta?.source ?? null,
+            rowCount: rows.length,
+          };
+        }
+      } catch (e) {
+        // ignore summary errors
+      }
     }
 
-    return NextResponse.json({ message: { role: 'assistant', content: final } });
+    // If this was a dev simulation, include debug info so tests can inspect tool results
+    if (simulateDraft !== undefined) {
+      return NextResponse.json({ ...payload, debug: { toolCall, toolResult } });
+    }
+
+    return NextResponse.json(payload);
   } catch (error) {
     console.error('AI Chat API Error:', error);
     return NextResponse.json({ error: 'Failed to process AI request' }, { status: 500 });
