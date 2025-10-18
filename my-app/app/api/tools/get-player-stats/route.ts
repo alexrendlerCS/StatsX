@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import fs from 'fs';
+import path from 'path';
 
 export async function POST(req: NextRequest) {
   try {
@@ -262,15 +264,41 @@ export async function POST(req: NextRequest) {
       // ignore
     }
 
-    let opponentId: string | null = null;
-    let opponentDefense: any = null;
+  let opponentId: string | null = null;
+  let opponentDefense: any = null;
+  let opponentDefenseRank: any = null;
+  let opponentSource: string | null = null;
+  let opponentIsBye = false;
+  let opponentDefenseSource: string | null = null;
+  let opponentRankSource: string | null = null;
+  let teamMismatchWarning: string | null = null;
+  const provenance: any = {};
     try {
       const cw = Number(process.env.CURRENT_WEEK || (process.env.NEXT_PUBLIC_CURRENT_WEEK || 0)) || 0;
       // prefer config file if available
       let configWeek = cw;
       try {
-        const cfg = require('@/../../my-app/config/current-week.json');
-        if (cfg?.currentWeek) configWeek = Number(cfg.currentWeek);
+        // Try several likely filesystem locations for a local config file. Avoid bundler requires.
+        const candidates = [
+          path.join(process.cwd(), 'config', 'current-week.json'),
+          path.join(process.cwd(), 'my-app', 'config', 'current-week.json'),
+          path.join(__dirname, '..', '..', 'config', 'current-week.json'),
+          path.join(__dirname, '..', '..', '..', 'config', 'current-week.json'),
+        ];
+        for (const pth of candidates) {
+          try {
+            if (fs.existsSync(pth)) {
+              const raw = fs.readFileSync(pth, 'utf8');
+              const cfg = JSON.parse(raw);
+              if (cfg && cfg.currentWeek) {
+                configWeek = Number(cfg.currentWeek);
+                break;
+              }
+            }
+          } catch (e) {
+            // ignore parse/read errors and try next candidate
+          }
+        }
       } catch (e) {
         // ignore
       }
@@ -284,24 +312,100 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // fetch defense_averages for opponent and player's position
+      // If we couldn't find an opponent via team_schedule, only use a player_stats
+      // row if that row explicitly matches the configured current week. Otherwise
+      // treat as a bye/missing schedule and do not infer opponent from past weeks.
+      if (!opponentId && Array.isArray(rows) && rows.length > 0) {
+        try {
+          const candidate = rows.find((r: any) => Number(r.week) === Number(weekToCheck));
+          if (candidate && typeof candidate.opponent === 'string') {
+            const rawOpp = String(candidate.opponent).trim();
+            if (rawOpp.toLowerCase() === 'bye') {
+              opponentIsBye = true;
+              opponentSource = 'player_stats.opponent';
+            } else if (rawOpp.length > 0) {
+              const norm = rawOpp.replace(/^@/, '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+              if (norm.length > 0) {
+                opponentId = norm;
+                opponentSource = 'player_stats.opponent';
+              }
+            }
+          } else {
+            // No schedule row and no player_stats row for currentWeek -> bye or missing schedule
+            opponentIsBye = true;
+          }
+        } catch (e) {
+          opponentIsBye = true;
+        }
+      }
+
       if (opponentId) {
+        provenance.opponentFetchedFrom = opponentSource || 'team_schedule';
+      } else if (opponentIsBye) {
+        provenance.opponentFetchedFrom = opponentSource || 'player_stats.opponent';
+      }
+
+      // fetch defense_averages for opponent and player's position
+      if (opponentId && !opponentIsBye) {
         const pos = rows && rows[0] && rows[0].position_id ? rows[0].position_id : null;
         if (pos) {
           try {
             const def = await supabase.from('defense_averages').select('*').eq('team_id', opponentId).eq('position_id', pos).maybeSingle();
-            if (def?.data) opponentDefense = def.data;
+            if (def?.data) {
+              opponentDefense = def.data;
+              opponentDefenseSource = 'defense_averages';
+            }
           } catch (e) {
             // ignore
           }
+          // Try to fetch canonical defensive ranks from materialized view 'defense_rankings'
+          try {
+            const rankRes = await supabase.from('defense_rankings').select('pass_rank,rush_rank,receive_rank,composite_rank').eq('team_id', opponentId).eq('position_id', pos).maybeSingle();
+            if (rankRes?.data) {
+              opponentDefenseRank = rankRes.data;
+              opponentRankSource = 'defense_rankings';
+            }
+          } catch (e) {
+            // ignore; view may not exist or be missing in schema cache
+          }
         }
       }
+
+      // Validate player's team exists in canonical teams table
+      try {
+        if (playerTeamId) {
+          const tcheck = await supabase.from('teams').select('team_id').eq('team_id', playerTeamId).maybeSingle();
+          if (!tcheck || !tcheck.data) {
+            teamMismatchWarning = `player team_id '${playerTeamId}' not found in teams table`;
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      if (opponentDefenseSource) provenance.defenseFetchedFrom = opponentDefenseSource;
+      if (opponentRankSource) provenance.defenseRankFetchedFrom = opponentRankSource;
     } catch (e) {
       // ignore
     }
 
-    // Return rows as-is plus the source table (so callers know where the data came from)
-    return NextResponse.json({ playerId: playerRow.id, rows, sourceTable, returnedSeason, playerTeamId, opponentId, opponentDefense });
+    // Return rows as-is plus the source table and provenance/ opponent info
+    return NextResponse.json({
+      playerId: playerRow.id,
+      rows,
+      sourceTable,
+      returnedSeason,
+      playerTeamId,
+      opponentId,
+      opponentDefense,
+      opponentDefenseRank,
+      opponentIsBye,
+      opponentSource,
+      opponentDefenseSource,
+      opponentRankSource,
+      provenance,
+      teamMismatchWarning,
+    });
   } catch (err: any) {
     console.error('get-player-stats error:', err?.message || err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

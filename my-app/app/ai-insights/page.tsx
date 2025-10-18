@@ -12,6 +12,10 @@ interface Message {
   content: string;
   sender: 'user' | 'ai';
   timestamp: Date;
+  // optional debug/provenance fields returned by the ai-chat orchestrator
+  debug?: any;
+  toolSummary?: any;
+  recommendation?: any;
 }
 
 export default function AIInsightsPage() {
@@ -85,7 +89,10 @@ export default function AIInsightsPage() {
         id: (Date.now() + 1).toString(),
         content: aiContent,
         sender: 'ai',
-        timestamp: new Date()
+        timestamp: new Date(),
+        debug: data?.debug ?? data?.debug ?? null,
+        toolSummary: data?.toolSummary ?? null,
+        recommendation: data?.recommendation ?? null,
       };
 
       setMessages(prev => [...prev, aiMessage]);
@@ -154,6 +161,53 @@ export default function AIInsightsPage() {
           </div>
         </div>
 
+        {/* Candidate disambiguation modal (forced) */}
+        {candidates && candidates.length > 0 && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+            <div className="bg-gray-800 rounded-lg p-6 w-full max-w-lg">
+              <h2 className="text-lg font-semibold text-white mb-2">Select a player</h2>
+              <p className="text-sm text-gray-300 mb-4">Multiple players match your query. Please select the correct one to continue.</p>
+              <div className="space-y-2 max-h-72 overflow-y-auto mb-4">
+                {
+                  // Client-side dedupe/sort as a safety net: normalize by name, prefer numeric ids
+                  (() => {
+                    const map = new Map<string, { id: string; name: string; source?: string }>();
+                    for (const c of candidates) {
+                      const key = c.name?.toLowerCase().trim() ?? String(c.id);
+                      const existing = map.get(key);
+                      if (!existing) {
+                        map.set(key, c);
+                        continue;
+                      }
+                      const existingIsNumeric = !isNaN(Number(existing.id));
+                      const cIsNumeric = !isNaN(Number(c.id));
+                      if (!existingIsNumeric && cIsNumeric) {
+                        map.set(key, c);
+                      }
+                    }
+                    const out = Array.from(map.values()).slice(0, 20);
+                    return out.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => handlePickCandidate(c.id, c.name)}
+                        className="w-full text-left bg-gray-700 hover:bg-gray-600 p-3 rounded text-sm text-gray-200"
+                      >
+                        <div className="flex justify-between">
+                          <div>{c.name}</div>
+                          <div className="text-xs text-gray-400">id: {c.id}</div>
+                        </div>
+                      </button>
+                    ));
+                  })()
+                }
+              </div>
+              <div className="flex justify-end">
+                <Button variant="ghost" size="sm" onClick={() => { setCandidates([]); setShowCandidatesFor(null); }}>Cancel</Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
           {/* Chat Interface - Main Section */}
           <div className="lg:col-span-3">
@@ -200,6 +254,37 @@ export default function AIInsightsPage() {
                           <p className="text-xs opacity-70 mt-1">
                             {message.timestamp.toLocaleTimeString()}
                           </p>
+                          {/* Debug / Provenance panel for AI responses */}
+                          {message.sender === 'ai' && (message.debug || message.toolSummary || message.recommendation) && (
+                            <details className="mt-2 text-xs text-gray-300">
+                              <summary className="cursor-pointer text-blue-300">Debug / Provenance</summary>
+                              <div className="mt-2 space-y-2">
+                                {message.toolSummary && (
+                                  <div className="bg-gray-800 p-2 rounded">
+                                    <div className="font-medium text-gray-200">Tool Summary / Provenance</div>
+                                    <pre className="text-xs text-gray-300 whitespace-pre-wrap">{JSON.stringify(message.toolSummary, null, 2)}</pre>
+                                  </div>
+                                )}
+
+                                {message.debug && (
+                                  <div className="bg-gray-800 p-2 rounded">
+                                    <div className="font-medium text-gray-200">Debug</div>
+                                    <pre className="text-xs text-gray-300 whitespace-pre-wrap">{JSON.stringify(message.debug, null, 2)}</pre>
+                                  </div>
+                                )}
+
+                                {message.recommendation && (
+                                  <div className="bg-gray-800 p-2 rounded">
+                                    <div className="font-medium text-gray-200">Recommendation</div>
+                                    <div className="text-xs text-gray-300">Allowed: {String(Boolean(message.recommendation.allowed))}</div>
+                                    {message.recommendation.reason && (
+                                      <div className="text-xs text-gray-400">Reason: {message.recommendation.reason}</div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </details>
+                          )}
                         </div>
                       </div>
                     </div>
