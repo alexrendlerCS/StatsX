@@ -31,6 +31,7 @@ type GetPlayerStatsArgs = {
   season?: number;
   weeks?: number[];
   limit?: number;
+  offset?: number;
 };
 
 export const tools: Record<string, ToolSpec> = {
@@ -60,20 +61,31 @@ export const tools: Record<string, ToolSpec> = {
         if (!isInt(raw.limit)) return { ok: false, error: 'limit must be integer' } as any;
         limit = Math.max(1, Math.min(500, raw.limit));
       }
+      let offset = 0;
+      if (raw?.offset !== undefined) {
+        if (!isInt(raw.offset) || raw.offset < 0) return { ok: false, error: 'offset must be non-negative integer' } as any;
+        offset = raw.offset;
+      }
 
-      return { ok: true, args: { playerName, season, weeks, limit } } as any;
+      return { ok: true, args: { playerName, season, weeks, limit, offset } } as any;
     },
     async call(args: GetPlayerStatsArgs) {
       const t0 = Date.now();
       const { status, json } = await postJSON('/api/tools/get-player-stats', args);
       const tookMs = Math.round(Date.now() - t0);
+      // Return the tool response body even on non-200 so callers can inspect candidates/error payloads.
       if (status !== 200) {
-        return { success: false, error: { code: String(status), message: json?.error || 'tool failed' } };
+        return {
+          success: false,
+          data: json,
+          error: { code: String(status), message: json?.error || 'tool failed' },
+          meta: { source: 'supabase', rowCount: json?.rows?.length ?? 0, tookMs, status },
+        };
       }
       return {
         success: true,
         data: json,
-        meta: { source: 'supabase', rowCount: json?.rows?.length ?? 0, tookMs },
+        meta: { source: 'supabase', rowCount: json?.rows?.length ?? 0, tookMs, status },
       };
     },
   },

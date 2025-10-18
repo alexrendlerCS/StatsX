@@ -25,6 +25,8 @@ export default function AIInsightsPage() {
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [candidates, setCandidates] = useState<Array<{id:string,name:string}>>([]);
+  const [showCandidatesFor, setShowCandidatesFor] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -65,9 +67,23 @@ export default function AIInsightsPage() {
 
       const data = await response.json();
 
+      // If the tool/orchestrator returned candidates, surface them in the UI
+      if (data?.candidates && Array.isArray(data.candidates)) {
+        setCandidates(data.candidates.slice(0, 10).map((c: any) => ({ id: String(c.id), name: c.name })));
+        setShowCandidatesFor(userMessage.content);
+        setIsLoading(false);
+        return;
+      }
+
+      // Support multiple response shapes from the server for backward compatibility
+      const aiContent = data?.message?.content ?? data?.response ?? data?.responseText ?? "I'm still learning! The AI service will be connected soon.";
+
+      // Dev: log debug info when available
+      if (data?.debug) console.debug('AI debug:', data.debug);
+
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: data.response || "I'm still learning! The AI service will be connected soon.",
+        content: aiContent,
         sender: 'ai',
         timestamp: new Date()
       };
@@ -84,6 +100,29 @@ export default function AIInsightsPage() {
       };
 
       setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePickCandidate = async (id: string, name: string) => {
+    // Clear candidates UI and call get-player-stats directly for quick results
+    setCandidates([]);
+    setShowCandidatesFor(null);
+    setIsLoading(true);
+
+    try {
+      const res = await fetch('/api/tools/get-player-stats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId: id, playerName: name }),
+      });
+      const json = await res.json();
+      const content = json?.rows ? `Returned ${json.rows.length} rows for ${name}` : json?.error ?? 'No data';
+      const msg: Message = { id: Date.now().toString(), content, sender: 'ai', timestamp: new Date() };
+      setMessages(prev => [...prev, msg]);
+    } catch (e) {
+      setMessages(prev => [...prev, { id: Date.now().toString(), content: 'Failed to fetch player rows', sender: 'ai', timestamp: new Date() }]);
     } finally {
       setIsLoading(false);
     }

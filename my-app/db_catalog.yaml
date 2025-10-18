@@ -1,0 +1,337 @@
+database: StatsX
+conventions:
+  season_week: "Most tables use NFL season (int) and week (int). Week may be NULL for season-level rows."
+  ids: "PKs are synthetic (id serial). Use player_name/team_id/position_id for joins."
+  names: "normalized_name may exist; prefer exact match on player_name first, fall back to normalized_name."
+  embeddings: "embedding columns use pgvector (vector) in DB; shown here as USER-DEFINED."
+
+tables:
+  player_stats:
+    purpose: Weekly player game logs (primary fact table).
+    pk: [id]
+    keys_like: [player_name, team_id, week]
+    columns:
+      - {name: player_name, type: text}
+      - {name: normalized_name, type: text, nullable: true}
+      - {name: position_id, type: text}
+      - {name: team_id, type: text}
+      - {name: week, type: int}
+      - {name: opponent, type: text, nullable: true}
+      - {name: fpts, type: int, default: 0}
+      - {name: completions, type: int, default: 0}
+      - {name: passing_attempts, type: int, default: 0}
+      - {name: passing_yards, type: int, default: 0}
+      - {name: passing_tds, type: int, default: 0}
+      - {name: interceptions, type: int, default: 0}
+      - {name: rushing_attempts, type: int, default: 0}
+      - {name: rushing_yards, type: int, default: 0}
+      - {name: rushing_tds, type: int, default: 0}
+      - {name: receptions, type: int, default: 0}
+      - {name: receiving_yards, type: int, default: 0}
+      - {name: receiving_tds, type: int, default: 0}
+      - {name: targets, type: int, default: 0}
+      - {name: snaps, type: int, nullable: true}
+      - {name: red_zone_targets, type: int, default: 0}
+      - {name: red_zone_touches, type: int, default: 0}
+      - {name: goal_to_go, type: int, default: 0}
+      - {name: total_touches, type: int, default: 0}
+      - {name: reception_percentage, type: numeric, default: 0}
+      - {name: fantasy_points_against, type: numeric, default: 0}
+      - {name: player_rank, type: int, default: 0}
+      - {name: player_id, type: text, nullable: true}
+      - {name: created_at, type: timestamp}
+    refs:
+      - {to: teams.team_id, on: team_id}
+      - {to: positions.position_id, on: position_id}
+
+  player_season_stats:
+    purpose: Per-season aggregates for each player.
+    pk: [id]
+    columns:
+      - {name: player_name, type: text}
+      - {name: position_id, type: text}
+      - {name: team_id, type: text}
+      - {name: season, type: int}
+      - {name: games_played, type: int}
+      - {name: fpts, type: int}
+      - {name: passing_yards, type: int}
+      - {name: rushing_yards, type: int}
+      - {name: receiving_yards, type: int}
+      - {name: rushing_tds, type: int}
+      - {name: receiving_tds, type: int}
+      - {name: targets, type: int}
+      - {name: receptions, type: int}
+
+  recent_player_stats:
+    purpose: Quick-access recent logs (subset of columns).
+    pk: [id]
+    columns:
+      - {name: player_name, type: text}
+      - {name: position_id, type: text}
+      - {name: week, type: int}
+      - {name: team_id, type: text}
+      - {name: passing_yards, type: int}
+      - {name: rushing_yards, type: int}
+      - {name: receiving_yards, type: int}
+      - {name: rushing_tds, type: int}
+      - {name: receiving_tds, type: int}
+      - {name: targets, type: int}
+
+  nfl_historical_stats:
+    purpose: Historical weekly stats archive (plus some projections).
+    pk: [id]
+    columns:
+      - {name: player_name, type: text}
+      - {name: position, type: text}
+      - {name: team, type: text}
+      - {name: season, type: int}
+      - {name: week, type: int, nullable: true}
+      - {name: opponent, type: text, nullable: true}
+      - {name: passing_yards, type: int}
+      - {name: rushing_yards, type: int}
+      - {name: receiving_yards, type: int}
+      - {name: targets, type: int}
+      - {name: fpts, type: numeric}
+      - {name: projected_points, type: numeric}
+
+  player_projections:
+    purpose: Atomic projections by player + stat.
+    pk: [id]
+    columns:
+      - {name: player_name, type: text}
+      - {name: position, type: text}
+      - {name: opponent, type: text}
+      - {name: stat_key, type: text}
+      - {name: projection, type: numeric}
+
+  player_lines:
+    purpose: Per-week full-line projections (multiple stats).
+    pk: [id]
+    columns:
+      - {name: player_name, type: text}
+      - {name: position, type: text}
+      - {name: team_id, type: text}
+      - {name: week, type: int}
+      - {name: opponent_id, type: text}
+      - {name: projected_passing_yards, type: numeric}
+      - {name: projected_rushing_yards, type: numeric}
+      - {name: projected_receiving_yards, type: numeric}
+      - {name: projected_passing_tds, type: numeric}
+      - {name: projected_rushing_tds, type: numeric}
+      - {name: projected_receiving_tds, type: numeric}
+
+  defense_averages:
+    purpose: Team x position allowed averages (non-QB).
+    pk: [id]
+    columns:
+      - {name: team_id, type: text}
+      - {name: position_id, type: text}
+      - {name: avg_rushing_attempts, type: numeric}
+      - {name: avg_rushing_yards, type: numeric}
+      - {name: avg_receiving_yards, type: numeric}
+      - {name: avg_targets, type: numeric}
+      - {name: avg_receptions, type: numeric}
+
+  defense_averages_qb:
+    purpose: Team QB defense allowed averages.
+    pk: [id]
+    unique: [team_id]
+    columns:
+      - {name: team_id, type: text}
+      - {name: avg_passing_yards, type: numeric}
+      - {name: avg_passing_tds, type: numeric}
+      - {name: avg_interceptions, type: numeric}
+      - {name: avg_qb_rushing_yards, type: numeric}
+
+  general_defensive_stats:
+    purpose: Weekly defense logs by team x position (non-QB).
+    pk: [id]
+    columns:
+      - {name: team_id, type: text}
+      - {name: position_id, type: text}
+      - {name: week, type: int}
+      - {name: total_rushing_yards, type: int}
+      - {name: total_receiving_yards, type: int}
+      - {name: targets, type: int}
+      - {name: receptions, type: int}
+
+  qb_defensive_stats:
+    purpose: Weekly defense logs (QB stats allowed).
+    pk: [id]
+    columns:
+      - {name: team_id, type: text}
+      - {name: week, type: int}
+      - {name: passing_yards, type: int}
+      - {name: passing_tds, type: int}
+      - {name: interceptions, type: int}
+      - {name: rushing_yards, type: int}
+      - {name: rushing_tds, type: int}
+
+  defensive_matchup_rankings:
+    purpose: Precomputed difficulty ranks (lower rank = tougher/easier per your logic).
+    pk: [id]
+    columns:
+      - {name: position, type: text}
+      - {name: team_id, type: text}
+      - {name: avg_stat, type: numeric}
+      - {name: yards_above_avg, type: numeric}
+      - {name: rank, type: int}
+
+  team_schedule:
+    purpose: Team opponent by week.
+    pk: [id]
+    columns:
+      - {name: team_id, type: text}
+      - {name: week, type: int}
+      - {name: opponent_id, type: text}
+
+  teams:
+    purpose: Team reference.
+    pk: [team_id]
+    columns:
+      - {name: team_id, type: text}
+      - {name: abbreviation, type: text}
+      - {name: full_name, type: text}
+
+  positions:
+    purpose: Position reference.
+    pk: [position_id]
+    columns:
+      - {name: position_id, type: text}
+      - {name: position_name, type: text}
+
+  hot_players:
+    purpose: Players trending up (recent vs season average).
+    pk: [id]
+    columns:
+      - {name: player_name, type: text}
+      - {name: position, type: text}
+      - {name: stat, type: text}
+      - {name: recent_average, type: numeric}
+      - {name: season_average, type: numeric}
+      - {name: percentage_change, type: numeric}
+
+  cold_players:
+    purpose: Players trending down.
+    pk: [id]
+    columns:
+      - {name: player_name, type: text}
+      - {name: position, type: text}
+      - {name: stat, type: text}
+      - {name: recent_average, type: numeric}
+      - {name: season_average, type: numeric}
+      - {name: percentage_change, type: numeric}
+
+  players_to_watch:
+    purpose: Curated spotlight records.
+    pk: [id]
+    columns:
+      - {name: normalized_name, type: text}
+      - {name: player_name, type: text}
+      - {name: position, type: text}
+      - {name: stat_to_display, type: text}
+      - {name: last_3_avg, type: numeric}
+      - {name: season_avg, type: numeric}
+      - {name: opponent, type: text}
+      - {name: matchup_type, type: text}
+      - {name: performance_type, type: text}
+
+  touch_distribution:
+    purpose: Player touch shares and splits.
+    pk: [id]
+    columns:
+      - {name: player_name, type: text}
+      - {name: position_id, type: text}
+      - {name: team_id, type: text}
+      - {name: avg_touches_per_game, type: numeric}
+      - {name: touch_share_percentage, type: numeric}
+      - {name: red_zone_touch_share, type: numeric}
+
+  weekly_leaders:
+    purpose: Top performers by stat per week.
+    pk: [id]
+    columns:
+      - {name: week, type: int}
+      - {name: player_name, type: text}
+      - {name: position_id, type: text}
+      - {name: stat_value, type: int}
+      - {name: rank, type: int}
+
+  player_list:
+    purpose: Unique list of players.
+    pk: [id]
+    unique: [player_name]
+    columns:
+      - {name: player_name, type: text}
+
+  ai_query_embeddings:
+    purpose: Cache of user queries (text + embedding + response).
+    pk: [id]
+    columns:
+      - {name: query_text, type: text}
+      - {name: embedding, type: vector}
+      - {name: response_text, type: text}
+      - {name: query_type, type: text}
+      - {name: usage_count, type: int}
+      - {name: last_used, type: timestamp}
+
+  player_performance_embeddings:
+    purpose: Player week summaries for RAG.
+    pk: [id]
+    columns:
+      - {name: player_name, type: text}
+      - {name: position_name, type: text}
+      - {name: team, type: text}
+      - {name: season, type: int}
+      - {name: week, type: int}
+      - {name: performance_summary, type: text}
+      - {name: embedding, type: vector}
+
+  team_performance_embeddings:
+    purpose: Team season summaries for RAG.
+    pk: [id]
+    columns:
+      - {name: team_name, type: text}
+      - {name: season, type: int}
+      - {name: performance_summary, type: text}
+      - {name: embedding, type: vector}
+
+  matchup_embeddings:
+    purpose: Game matchup summaries for RAG.
+    pk: [id]
+    columns:
+      - {name: team_name, type: text}
+      - {name: opponent, type: text}
+      - {name: season, type: int}
+      - {name: week, type: int}
+      - {name: matchup_analysis, type: text}
+      - {name: embedding, type: vector}
+
+  historical_context_embeddings:
+    purpose: League/season/week context notes for RAG.
+    pk: [id]
+    columns:
+      - {name: context_type, type: text}
+      - {name: season, type: int}
+      - {name: week, type: int}
+      - {name: context_summary, type: text}
+      - {name: embedding, type: vector}
+
+  feedback:
+    purpose: User feedback capture.
+    pk: [id]
+    columns:
+      - {name: content, type: text}
+      - {name: email, type: text}
+      - {name: created_at, type: timestamp}
+
+  picks:
+    purpose: Opinions/picks log.
+    pk: [id]
+    columns:
+      - {name: name, type: text}
+      - {name: player_name, type: text}
+      - {name: stat, type: text}
+      - {name: value, type: numeric}
+      - {name: over_under, type: text}
+      - {name: reason, type: text}
