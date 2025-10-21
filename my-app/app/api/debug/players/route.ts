@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+// This route uses Request properties (e.g., request.url) and must be handled
+// dynamically at runtime. Force dynamic rendering to avoid static prerendering
+// errors during build.
+export const dynamic = 'force-dynamic';
 import { createClient } from '@supabase/supabase-js';
 
 export async function GET(request: NextRequest) {

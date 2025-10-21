@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+// This route inspects request properties and should be handled dynamically.
+export const dynamic = 'force-dynamic';
 import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: NextRequest) {
